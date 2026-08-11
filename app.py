@@ -64,8 +64,17 @@ def index():
         "symbol": symbol,
         "params": {"trigger": trigger, "limit": limit, "stop": stop},
         "error": None,
+        "ran": False,
     }
 
+    # The landing page must answer instantly. Render's port scanner probes "/"
+    # with a short timeout, and an eager diagnostic here made every probe time
+    # out - the service was declared to have no open HTTP ports while it was
+    # busy computing a report nobody had asked for. Compute only on request.
+    if request.args.get("run") != "1":
+        return render_template("report_template.html", **ctx)
+
+    ctx["ran"] = True
     try:
         t0 = time.time()
         ds = get_dataset(symbol)

@@ -208,6 +208,7 @@
   </header>
 
   <form class="controls" method="get" action="/">
+    <input type="hidden" name="run" value="1">
     <label>
       <span class="field-label">종목</span>
       <select name="symbol">
@@ -231,7 +232,18 @@
     <button type="submit">측정 실행</button>
   </form>
 
-  {% if error %}
+  {% if not ran %}
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">준비됨</h2>
+      <span class="band-note">종목을 고르고 «측정 실행»을 누르세요</span>
+    </div>
+    <p>이 화면은 봉 하나 안에 진입 레벨과 손절 레벨이 함께 들어가서 <strong>어느 쪽이 먼저 닿았는지
+    알 수 없는 세션의 비율</strong>을 측정합니다. 일봉 해상도와 60분봉 해상도를 같은 규칙으로 비교합니다.</p>
+    <p class="hydro">SYNTH3X는 즉시 나옵니다. TQQQ·SOXL·SPY는 730일치 60분봉을 처음
+    받아오는 데 1~2분 걸릴 수 있습니다 — 멈춘 게 아닙니다.</p>
+  </section>
+  {% elif error %}
   <div class="err">
     <span class="caution-tag">실행 실패</span>
     <p><strong>{{ error }}</strong></p>
