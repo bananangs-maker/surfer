@@ -136,3 +136,51 @@ def test_stop_above_trigger_is_rejected():
 def test_limit_below_trigger_is_rejected():
     with pytest.raises(ValueError):
         LevelSet(SD, Side.LONG, 100.0, 99.0, 97.0)
+
+
+# --- pullback entries (buy limit below the market) -----------------------
+
+def pullback(trigger=100.0, floor=98.0, stop=96.0, target=None):
+    from schema import EntryStyle
+
+    return LevelSet(SD, Side.LONG, trigger, floor, stop, target,
+                    style=EntryStyle.PULLBACK)
+
+
+def test_pullback_does_not_fill_when_price_stays_above():
+    out = adjudicate_session(pullback(), frame(bar(102, 104, 100.5, 103)))
+    assert out.entry is None
+    assert out.no_fill_reason is NoFill.NO_TRIGGER
+
+
+def test_pullback_fills_at_the_limit_when_price_dips_to_it():
+    out = adjudicate_session(pullback(), frame(bar(101, 102, 99.5, 101.5)))
+    assert out.entry.price == pytest.approx(100.0)
+    assert out.entry.at_gap is False
+
+
+def test_pullback_gap_below_limit_fills_at_the_open():
+    # Opened inside the band, below the trigger: better nominal price, worse spot.
+    out = adjudicate_session(pullback(), frame(bar(98.5, 100, 98.2, 99.5)))
+    assert out.entry.price == pytest.approx(98.5)
+    assert out.entry.at_gap is True
+
+
+def test_pullback_gap_through_floor_is_abandoned_not_filled():
+    out = adjudicate_session(pullback(), frame(bar(97.0, 97.5, 96.5, 97.2)))
+    assert out.entry is None
+    assert out.no_fill_reason is NoFill.GAP_THROUGH_LIMIT
+
+
+def test_pullback_rejects_a_stop_inside_the_fill_band():
+    from schema import EntryStyle
+
+    with pytest.raises(ValueError):
+        LevelSet(SD, Side.LONG, 100.0, 98.0, 99.0, style=EntryStyle.PULLBACK)
+
+
+def test_pullback_rejects_a_limit_above_the_trigger():
+    from schema import EntryStyle
+
+    with pytest.raises(ValueError):
+        LevelSet(SD, Side.LONG, 100.0, 102.0, 96.0, style=EntryStyle.PULLBACK)

@@ -89,6 +89,26 @@ class Side(Enum):
     SHORT = "short"
 
 
+class EntryStyle(Enum):
+    """How the resting entry order relates to current price.
+
+    BREAKOUT: stop-limit ABOVE the market. Fills on strength; entry_limit is a
+    CEILING, and gapping past it is a missed trade rather than a loss.
+
+    PULLBACK: limit BELOW the market. Fills on weakness; entry_limit is a FLOOR,
+    and a gap through it means structure has broken, so the order is abandoned
+    rather than filled at any price.
+
+    Both are expressible as resting orders placed before the open, which is the
+    constraint the whole design turns on. Without this distinction the engine
+    could only ever test momentum continuation - a silent restriction on which
+    entry rules were even thinkable.
+    """
+
+    BREAKOUT = "breakout"
+    PULLBACK = "pullback"
+
+
 @dataclass(frozen=True)
 class LevelSet:
     """The output of a level generator: prices, not decisions.
@@ -99,22 +119,32 @@ class LevelSet:
 
     session_date: date          # the session these levels are ARMED for
     side: Side
-    entry_trigger: float        # stop-limit trigger
-    entry_limit: float          # worst acceptable entry fill
+    entry_trigger: float        # the price that arms the fill
+    entry_limit: float          # worst acceptable fill: ceiling if BREAKOUT, floor if PULLBACK
     initial_stop: float         # protective stop, armed only after entry
     target: float | None = None
+    style: EntryStyle = EntryStyle.BREAKOUT
     meta: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.side is Side.LONG:
-            if self.entry_limit < self.entry_trigger:
-                raise ValueError("long: entry_limit must be >= entry_trigger")
-            if self.initial_stop >= self.entry_trigger:
-                raise ValueError("long: initial_stop must be < entry_trigger")
-            if self.target is not None and self.target <= self.entry_trigger:
-                raise ValueError("long: target must be > entry_trigger")
-        else:
+        if self.side is not Side.LONG:
             raise NotImplementedError("SURFER v0 is long-only by design decision")
+
+        if self.style is EntryStyle.BREAKOUT:
+            if self.entry_limit < self.entry_trigger:
+                raise ValueError("breakout: entry_limit is a ceiling, must be >= trigger")
+            if self.initial_stop >= self.entry_trigger:
+                raise ValueError("breakout: initial_stop must be < entry_trigger")
+        else:
+            if self.entry_limit > self.entry_trigger:
+                raise ValueError("pullback: entry_limit is a floor, must be <= trigger")
+            if self.initial_stop >= self.entry_limit:
+                raise ValueError(
+                    "pullback: initial_stop must be < entry_limit, or the stop sits "
+                    "inside the acceptable fill band and every fill is instantly stopped"
+                )
+        if self.target is not None and self.target <= self.entry_trigger:
+            raise ValueError("long: target must be > entry_trigger")
 
     def actionable_prices(self, in_position: bool) -> dict[str, float]:
         """Levels that could be touched given current state.

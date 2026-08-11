@@ -32,6 +32,7 @@ class ResolutionResult:
     sessions_armed: int
     sessions_entered: int
     ambiguous_sessions: int
+    ambiguous_entered: int
     ambiguous_bars: int
     gap_fills: int
     no_fill_no_trigger: int
@@ -40,11 +41,57 @@ class ResolutionResult:
 
     @property
     def ambiguity_rate(self) -> float:
+        """Share of ARMED sessions that are order-dependent.
+
+        Dilutive by construction: sessions where no entry ever triggered cannot
+        affect P&L, yet they sit in the denominator. Quote alongside
+        ambiguity_rate_entered, never instead of it.
+        """
         return self.ambiguous_sessions / self.sessions_armed if self.sessions_armed else 0.0
+
+    @property
+    def ambiguity_rate_entered(self) -> float:
+        """Share of ENTERED sessions that are order-dependent.
+
+        This is the figure that maps onto money. Measured on the fixture it is
+        39.3% where the armed-denominator figure reads 18.0%, and it lines up
+        with the 35.3% of closed trades the backtest flags as ambiguous - the
+        armed-denominator version does not.
+        """
+        return (
+            self.ambiguous_entered / self.sessions_entered
+            if self.sessions_entered else 0.0
+        )
 
     @property
     def entry_rate(self) -> float:
         return self.sessions_entered / self.sessions_armed if self.sessions_armed else 0.0
+
+
+def purchase_case(r60: "ResolutionResult", r1d: "ResolutionResult") -> dict:
+    """Absolute benefit, because the ratio is misleading at low base rates.
+
+    The first version of this reported the RELATIVE reduction in ambiguity rate.
+    That metric peaks exactly where intraday data is least worth buying: widen
+    the stop until daily ambiguity is 0.3%, and 60-minute bars "reduce" it by
+    100% while rescuing almost no sessions. Measured on the fixture:
+
+        stop 1.2 -> 32.4% vs 18.0%,  44.5% reduction, 14.4pp, many sessions
+        stop 4.0 ->  0.3% vs  0.0%, 100.0% reduction,  0.3pp, nothing at stake
+
+    So the decision quantity is the number of sessions whose outcome stops being
+    a coin flip: sessions_rescued. Report the ratio only as colour.
+    """
+    rescued = r1d.ambiguous_sessions - r60.ambiguous_sessions
+    return {
+        "sessions_rescued": rescued,
+        "gap_pp": (r1d.ambiguity_rate - r60.ambiguity_rate) * 100,
+        "share_rescued": rescued / r1d.sessions_armed if r1d.sessions_armed else 0.0,
+        "relative": (
+            1 - r60.ambiguity_rate / r1d.ambiguity_rate
+            if r1d.ambiguity_rate else None
+        ),
+    }
 
 
 def _run(label: str, per_session: dict, generator: LevelGenerator,
@@ -68,6 +115,9 @@ def _run(label: str, per_session: dict, generator: LevelGenerator,
         sessions_armed=len(outcomes),
         sessions_entered=sum(1 for o in outcomes if o.entry is not None),
         ambiguous_sessions=sum(1 for o in outcomes if o.ambiguous),
+        ambiguous_entered=sum(
+            1 for o in outcomes if o.ambiguous and o.entry is not None
+        ),
         ambiguous_bars=sum(o.ambiguous_bars for o in outcomes),
         gap_fills=sum(1 for o in outcomes if o.touched_gap),
         no_fill_no_trigger=sum(
@@ -124,7 +174,10 @@ def render_comparison(r60: ResolutionResult, r1d: ResolutionResult, ds: Dataset)
         row("sessions entered", r1d.sessions_entered, r60.sessions_entered),
         row("entry rate", r1d.entry_rate, r60.entry_rate, "{:.1%}"),
         row("AMBIGUOUS sessions", r1d.ambiguous_sessions, r60.ambiguous_sessions),
-        row("ambiguity rate", r1d.ambiguity_rate, r60.ambiguity_rate, "{:.1%}"),
+        row("ambiguity rate (armed)", r1d.ambiguity_rate, r60.ambiguity_rate, "{:.1%}"),
+        row("ambiguous AND entered", r1d.ambiguous_entered, r60.ambiguous_entered),
+        row("ambiguity rate (entered)",
+            r1d.ambiguity_rate_entered, r60.ambiguity_rate_entered, "{:.1%}"),
         row("gap-touched fills", r1d.gap_fills, r60.gap_fills),
         row("no fill: no trigger", r1d.no_fill_no_trigger, r60.no_fill_no_trigger),
         row("no fill: gap thru limit", r1d.no_fill_gap_through, r60.no_fill_gap_through),

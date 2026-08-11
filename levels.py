@@ -25,7 +25,7 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 
-from schema import LevelSet, Side
+from schema import EntryStyle, LevelSet, Side
 
 
 class LevelGenerator(Protocol):
@@ -192,4 +192,195 @@ class PlaceholderBreakout:
                 "prior_close": prior_close,
                 "is_placeholder": True,
             },
+        )
+
+
+class StructuralExit:
+    """Exit on a break of recent structure, recomputed each held session.
+
+    CONTRACT
+    --------
+        rule(history, prior_value) -> float | None
+
+    Pure function of completed sessions, like the level generator. It returns a
+    price, not a decision - the same discipline, for the same reason: the
+    operating loop places resting orders once a day, so an exit must be
+    expressible as a level.
+
+    RELATIONSHIP TO THE FIXED STOP
+    ------------------------------
+    This does NOT replace the fixed stop and does not contradict the decision to
+    keep it fixed. Position.effective_stop takes the higher of the two, so:
+
+        early in a trade    -> fixed stop dominates (structure is still below it)
+        as price advances   -> structure rises through it and becomes the exit
+
+    The fixed stop is the disaster floor. This is the normal exit path. Without
+    it the system could only ever leave a trade at a loss - measured on the
+    fixture, 48 of 48 closed trades exited on the stop, win rate 0%, because a
+    fixed stop with no exit rule holds winners indefinitely.
+
+    RATCHET
+    -------
+    `ratchet=True` forbids the level from falling. A structure low can retreat
+    while still sitting above the fixed stop, which would loosen protection
+    mid-trade - the dangerous direction on a 3x instrument. Ratcheting is a
+    recorded design decision, not a tuning knob: turning it off changes the risk
+    profile of every trade and belongs in the pre-registration document.
+
+    ENTRY SESSION
+    -------------
+    Deliberately NOT armed on the entry session; only the fixed stop is live
+    there. This keeps entry-session adjudication identical between the backtest
+    and the ambiguity diagnostic, so the two remain comparable. It also means a
+    trade cannot be structurally stopped out before it has held a full session.
+    """
+
+    name = "structural_prior_low_break"
+    lookback_sessions = 12
+
+    def __init__(
+        self,
+        low_lookback_sessions: int = 1,
+        buffer_atr: float = 0.25,
+        ratchet: bool = True,
+    ) -> None:
+        self.low_lookback_sessions = low_lookback_sessions
+        self.buffer_atr = buffer_atr
+        self.ratchet = ratchet
+
+    def __call__(
+        self, history: list[pd.DataFrame], prior_value: float | None = None
+    ) -> float | None:
+        if len(history) < max(1, self.low_lookback_sessions):
+            return prior_value
+        recent = history[-self.low_lookback_sessions:]
+        low = float(min(float(s["low"].min()) for s in recent if len(s)))
+
+        # A bare structure low triggers on ordinary noise, so back it off by a
+        # fraction of ATR. The size of that buffer is a parameter to measure,
+        # not a claim - it trades exit frequency against give-back.
+        a = atr60(history)
+        level = low - (self.buffer_atr * a if a else 0.0)
+
+        if self.ratchet and prior_value is not None:
+            level = max(level, prior_value)
+        return round(level, 4)
+
+
+# ============================================================
+# CANDIDATE ENTRY RULES
+#
+# These are CANDIDATES, not recommendations. Each is a different hypothesis
+# about what SURFER is for, and they are mutually exclusive in practice.
+#
+# HOW TO CHOOSE - and how not to.
+# Running all of them and keeping the best number is selection on the sample.
+# With three candidates and a few parameters each, something will look good on
+# any two-year window, and that appearance carries no information. The criterion
+# has to be written down BEFORE the comparison is run: which metric decides,
+# what margin counts as a real difference, and on which window. Otherwise the
+# comparison manufactures a winner.
+#
+# All three place resting orders derived only from completed sessions, so all
+# three are executable by the operating loop.
+# ============================================================
+
+
+class PullbackToPriorLow:
+    """CANDIDATE: buy weakness into the prior session's low.
+
+    Hypothesis: SURFER's job is to get filled at a better price than a late
+    market order would, which means buying dips inside a regime MATILDA has
+    already approved. This is the rule that matches "catch up on a missed
+    signal" most directly.
+
+    The floor matters more here than in a breakout. A gap far below the prior low
+    is not a discount, it is a different market, so the order is abandoned rather
+    than filled at any price.
+    """
+
+    name = "CANDIDATE_pullback_to_prior_low"
+    lookback_sessions = 12
+
+    def __init__(
+        self,
+        entry_atr_mult: float = 0.20,
+        floor_atr_mult: float = 0.80,
+        stop_atr_mult: float = 1.50,
+        min_history_sessions: int = 10,
+    ) -> None:
+        self.entry_atr_mult = entry_atr_mult
+        self.floor_atr_mult = floor_atr_mult
+        self.stop_atr_mult = stop_atr_mult
+        self.min_history_sessions = min_history_sessions
+
+    def __call__(self, history, armed_for):
+        if len(history) < self.min_history_sessions:
+            return None
+        a = atr60(history)
+        if a is None or a <= 0:
+            return None
+        prior = history[-1]
+        prior_low = float(prior["low"].min())
+
+        trigger = prior_low + self.entry_atr_mult * a   # buy limit just above the low
+        floor = trigger - self.floor_atr_mult * a
+        stop = floor - self.stop_atr_mult * a
+        if not (stop < floor <= trigger):
+            return None
+        return LevelSet(
+            session_date=armed_for, side=Side.LONG,
+            entry_trigger=round(trigger, 4), entry_limit=round(floor, 4),
+            initial_stop=round(stop, 4), target=None,
+            style=EntryStyle.PULLBACK,
+            meta={"generator": self.name, "atr60": round(a, 4),
+                  "prior_low": prior_low, "is_candidate": True},
+        )
+
+
+class PriorCloseVolatilityBreakout:
+    """CANDIDATE: buy a move of k*ATR beyond the prior close.
+
+    Hypothesis: SURFER trades intraday expansion rather than structure, so the
+    reference is the last traded price and the threshold is volatility-scaled.
+    Differs from the prior-high rule in that it can fire on a day that never
+    exceeds the prior session's high - it is a move-size rule, not a level rule.
+    """
+
+    name = "CANDIDATE_prior_close_vol_breakout"
+    lookback_sessions = 12
+
+    def __init__(
+        self,
+        trigger_atr_mult: float = 0.60,
+        limit_atr_mult: float = 0.40,
+        stop_atr_mult: float = 1.20,
+        min_history_sessions: int = 10,
+    ) -> None:
+        self.trigger_atr_mult = trigger_atr_mult
+        self.limit_atr_mult = limit_atr_mult
+        self.stop_atr_mult = stop_atr_mult
+        self.min_history_sessions = min_history_sessions
+
+    def __call__(self, history, armed_for):
+        if len(history) < self.min_history_sessions:
+            return None
+        a = atr60(history)
+        if a is None or a <= 0:
+            return None
+        prior_close = float(history[-1]["close"].iloc[-1])
+
+        trigger = prior_close + self.trigger_atr_mult * a
+        limit = trigger + self.limit_atr_mult * a
+        stop = trigger - self.stop_atr_mult * a
+        if stop >= trigger or limit < trigger:
+            return None
+        return LevelSet(
+            session_date=armed_for, side=Side.LONG,
+            entry_trigger=round(trigger, 4), entry_limit=round(limit, 4),
+            initial_stop=round(stop, 4), target=None,
+            style=EntryStyle.BREAKOUT,
+            meta={"generator": self.name, "atr60": round(a, 4),
+                  "prior_close": prior_close, "is_candidate": True},
         )
