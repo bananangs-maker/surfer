@@ -132,3 +132,37 @@ def test_no_pyramiding_only_one_position_at_a_time(ds):
     closed = sorted(res.closed_trades, key=lambda t: t.entry_ts)
     for a, b in zip(closed, closed[1:]):
         assert a.exit_ts <= b.entry_ts, "overlapping positions"
+
+
+# --- candidate D: pre-registered volatility gate --------------------------
+
+def test_candidate_d_parameters_match_the_preregistration():
+    """SURFER-DES-002 §4.1 fixed these. A silent change invalidates the study."""
+    from levels import VolatilityRegimeGate
+
+    assert VolatilityRegimeGate.PERCENTILE_WINDOW == 252
+    assert VolatilityRegimeGate.BLOCK_AT_PERCENTILE == 80.0
+    assert VolatilityRegimeGate.lookback_sessions >= 252
+
+
+def test_gate_blocks_entries_and_so_trades_fewer_than_candidate_a(ds):
+    from levels import PlaceholderBreakout, StructuralExit, VolatilityRegimeGate
+
+    a = run_backtest(ds, PlaceholderBreakout(), exit_rule=StructuralExit(),
+                     acknowledge_quarantine=True)
+    d = run_backtest(ds, VolatilityRegimeGate(), exit_rule=StructuralExit(),
+                     acknowledge_quarantine=True)
+    assert len(d.closed_trades) < len(a.closed_trades), (
+        "the gate did not reduce trade count; it is not gating anything"
+    )
+
+
+def test_gate_does_not_interfere_with_open_positions(ds):
+    """Entry-only by design. A gated exit could strand a position in exactly the
+    conditions the filter exists to avoid."""
+    from levels import StructuralExit, VolatilityRegimeGate
+
+    res = run_backtest(ds, VolatilityRegimeGate(), exit_rule=StructuralExit(),
+                       acknowledge_quarantine=True)
+    assert all(t.closed for t in res.trades)
+    assert any(t.sessions_held >= 1 for t in res.closed_trades)

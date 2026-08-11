@@ -20,6 +20,7 @@ in this shape is that nobody is awake at 03:00 KST to act on a bar close.
 from __future__ import annotations
 
 from datetime import date
+from dataclasses import replace
 from typing import Protocol
 
 import numpy as np
@@ -383,4 +384,91 @@ class PriorCloseVolatilityBreakout:
             style=EntryStyle.BREAKOUT,
             meta={"generator": self.name, "atr60": round(a, 4),
                   "prior_close": prior_close, "is_candidate": True},
+        )
+
+
+class VolatilityRegimeGate:
+    """CANDIDATE D: candidate A, gated off when realised volatility is extreme.
+
+    PRE-REGISTERED, SURFER-DES-002 §4.1, 2026-08-12. The parameters below are
+    FIXED and may not be tuned. They were chosen before any performance was
+    measured, and the reason for fixing a weakly-justified value in advance is
+    that choosing one afterwards is not a choice, it is a fit.
+
+        measure   : atr60() with stubs excluded
+        window    : trailing 252 sessions
+        block      : percentile >= 80 -> emit no entry levels
+
+    The gate governs ENTRY ONLY. An open position is untouched: exits stay with
+    the structural level and the fixed stop. Gating exits as well would mean the
+    filter could strand a position in exactly the conditions it was built to
+    avoid.
+
+    KNOWN RISK - same failure mode as MATILDA's removed VIX hard gate. A
+    volatility gate blocks entry during the high-volatility early phase of a
+    recovery, which is where much of the return lives. If D underperforms A,
+    that is consistent with the earlier finding and should be recorded as such
+    rather than explained away.
+
+    KNOWN RISK - SOXL. In MATILDA's signal history SOXL's volatility percentile
+    sits mostly in the 90s, so an 80 threshold may block nearly all SOXL
+    trading. Per the pre-registration that outcome is a RESULT ("this filter is
+    unsuited to SOXL"), not a reason to move the threshold.
+    """
+
+    name = "CANDIDATE_D_vol_regime_gated_breakout"
+    # 252 sessions of percentile history, plus the ATR window itself.
+    lookback_sessions = 264
+
+    PERCENTILE_WINDOW = 252
+    BLOCK_AT_PERCENTILE = 80.0
+
+    def __init__(self, base: "PlaceholderBreakout | None" = None) -> None:
+        self.base = base or PlaceholderBreakout()
+        # Memo of one ATR reading per session, keyed by that session's final bar
+        # timestamp. Without it the percentile recomputed the whole trailing
+        # series on every step, which is quadratic in session count - the same
+        # mistake already made once in diagnostics.py.
+        self._atr_memo: dict = {}
+
+    def percentile(self, history: list[pd.DataFrame]) -> float | None:
+        """Where today's ATR sits against its own trailing distribution.
+
+        Computed on a per-session basis: one ATR reading per session, using only
+        sessions that closed before the one being armed.
+        """
+        if len(history) < 30:
+            return None
+        series: list[float] = []
+        for k in range(20, len(history) + 1):
+            tail = history[k - 1]
+            if len(tail) == 0:
+                continue
+            key = tail["ts"].iloc[-1]
+            a = self._atr_memo.get(key)
+            if a is None:
+                a = atr60(history[max(0, k - 12):k])
+                if a is None:
+                    continue
+                self._atr_memo[key] = a
+            series.append(a)
+        if len(series) < 30:
+            return None
+        window = series[-self.PERCENTILE_WINDOW:]
+        current = window[-1]
+        return 100.0 * float(np.mean([v <= current for v in window]))
+
+    def __call__(self, history, armed_for):
+        pct = self.percentile(history)
+        if pct is None:
+            return None
+        if pct >= self.BLOCK_AT_PERCENTILE:
+            return None          # gated: no levels emitted, so no entry armed
+        lv = self.base(history, armed_for)
+        if lv is None:
+            return None
+        return replace(
+            lv,
+            meta={**lv.meta, "generator": self.name, "atr_percentile": round(pct, 1),
+                  "gate": f"blocked at >= {self.BLOCK_AT_PERCENTILE}"},
         )
