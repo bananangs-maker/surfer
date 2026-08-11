@@ -50,8 +50,14 @@ class ResolutionResult:
 def _run(label: str, per_session: dict, generator: LevelGenerator,
          history_source: dict, sessions: list) -> tuple[ResolutionResult, list[SessionOutcome]]:
     outcomes: list[SessionOutcome] = []
+    # Slice to the generator's declared window. Passing the whole prefix made a
+    # run quadratic in session count - 400 sessions took ~23s here and minutes
+    # on a 0.1-CPU instance, which read as a hung page. Results are unchanged:
+    # the generator never looked past this window in the first place.
+    window = getattr(generator, "lookback_sessions", 30)
     for i, sd in enumerate(sessions):
-        history = [history_source[s] for s in sessions[:i]]
+        lo = max(0, i - window)
+        history = [history_source[s] for s in sessions[lo:i]]
         levels = generator(history, sd)
         if levels is None:
             continue
@@ -88,12 +94,16 @@ def resolution_comparison(
     measures resolution's effect on execution modelling, not on signal quality.
     """
     sessions = ds.sessions
-    intraday = {s: ds.session(s) for s in sessions}
-
+    # One groupby, not one full-frame mask per session. The dict-comprehension
+    # form rescanned every row once per session, which is quadratic again.
+    intraday = {
+        d: g.sort_values("ts").reset_index(drop=True)
+        for d, g in ds.bars.groupby("session_date", sort=True)
+    }
     daily_all = to_daily(ds.bars)
     daily = {
-        s: daily_all[daily_all["session_date"] == s].reset_index(drop=True)
-        for s in sessions
+        d: g.reset_index(drop=True)
+        for d, g in daily_all.groupby("session_date", sort=True)
     }
 
     r60, _ = _run("60-minute", intraday, generator, intraday, sessions)

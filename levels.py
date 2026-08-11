@@ -30,6 +30,10 @@ from schema import LevelSet, Side
 
 class LevelGenerator(Protocol):
     name: str
+    # How many prior sessions the generator actually reads. Declared, not
+    # guessed: the diagnostic slices history to this window, which is what keeps
+    # a full run linear in session count instead of quadratic.
+    lookback_sessions: int
 
     def __call__(
         self, history: list[pd.DataFrame], armed_for: date
@@ -130,6 +134,12 @@ class PlaceholderBreakout:
     """
 
     name = "PLACEHOLDER_prior_high_breakout"
+
+    # Reads only the previous session plus enough bars for a 42-bar ATR.
+    # A regular session yields 7 bars, an early close 4, so 12 sessions supply
+    # 48-84 bars - comfortably above 42 while keeping the window tight. Every
+    # extra session here is re-read on every step of a run, so slack is costly.
+    lookback_sessions = 12
 
     def __init__(
         self,

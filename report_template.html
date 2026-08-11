@@ -247,7 +247,9 @@
   <div class="err">
     <span class="caution-tag">실행 실패</span>
     <p><strong>{{ error }}</strong></p>
-    <p class="hydro">야후에서 60분봉을 못 받은 경우가 가장 흔합니다. 종목을 SYNTH3X로 바꾸면 데이터 없이 엔진 동작은 확인됩니다.</p>
+    <p class="hydro">아래 붉은 글씨가 실제 원인입니다. 야후가 클라우드 서버 IP를 차단하거나
+    호출 빈도를 제한하는 경우가 흔합니다(<code>YFRateLimitError</code>, <code>Too Many Requests</code>,
+    <code>possibly delisted</code> 등). 종목을 SYNTH3X로 바꾸면 외부 데이터 없이 엔진 동작은 확인됩니다.</p>
     <pre>{{ trace }}</pre>
   </div>
   {% else %}
