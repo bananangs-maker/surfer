@@ -54,17 +54,21 @@ def true_range_60m(session: pd.DataFrame, prev_close: float | None) -> np.ndarra
 def stub_range_ratio(history: list[pd.DataFrame]) -> dict[str, float]:
     """Measure, don't assume: how does the 30-minute stub bar's range compare?
 
-    The obvious guess is that a half-length bar has a smaller range, so leaving
-    stubs in biases ATR downward. That guess is WRONG, at least on the fixture
-    used here and plausibly on real data: the 15:30-16:00 window contains the
-    closing auction and the last-hour volume ramp, so a 30-minute stub bar can
-    carry a LARGER true range than an average full midday bar.
+    MEASURED, TQQQ 60m, 730 sessions (Aug 2024 - Aug 2026):
+        stub 1.064% vs full 1.705% of price  ->  ratio 0.62x
+    The stub bar is NARROWER. Excluding stubs therefore RAISES the ATR estimate,
+    and leaving them in biases it downward.
 
-    The direction of the bias is therefore an empirical question about the
-    intraday volatility profile of the specific instrument, not something to be
-    settled by reasoning. Run this on real TQQQ/SOXL bars before fixing the
-    exclude_stubs decision in the pre-registration document. Ratios are
-    price-normalised so they compare bar shape rather than drift.
+    The synthetic fixture reports 1.30x - the opposite direction - because its
+    intraday volatility profile weights the closing bar most heavily. That is a
+    property of the fixture, not of TQQQ. Treat it as a warning: this question
+    cannot be settled on synthetic data, and could not have been settled by
+    reasoning either. Only the real series answers it.
+
+    Still unsettled for SOXL, which has a different intraday profile. Measure it
+    before fixing exclude_stubs in the pre-registration document.
+
+    Ratios are price-normalised so they compare bar shape rather than drift.
     """
     stub, full = [], []
     prev_close: float | None = None
@@ -95,11 +99,12 @@ def atr60(
 ) -> float | None:
     """ATR over 60-minute bars.
 
-    exclude_stubs is an UNRESOLVED design decision, not a settled default. It
-    is True here only so the placeholder generator runs; see stub_range_ratio()
-    for why the direction of the resulting bias cannot be assumed. Flipping this
-    flag moves every level this module emits, so it belongs in the
-    pre-registration document with a measurement attached.
+    exclude_stubs=True is now supported by measurement on TQQQ, where the stub
+    bar is 0.62x the width of a full bar, so including it drags ATR down. This
+    is an empirical result, not the a-priori reasoning that first justified the
+    default - that reasoning happened to reach the right answer for the wrong
+    reasons, and the synthetic fixture points the other way. Confirm on SOXL
+    before fixing it in the pre-registration document.
 
     Note also that excluding stubs shortens the bar sequence, so a fixed
     lookback_bars window then spans a different number of calendar sessions

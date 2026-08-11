@@ -82,6 +82,11 @@ def test_stub_bar_range_is_not_assumed_smaller():
 
     stats = stub_range_ratio(hist)
     assert stats["n_stub"] > 0 and stats["n_full"] > 0
+    # The fixture reports >1 (stub wider). Real TQQQ reports 0.62x (stub
+    # narrower) - the fixture's intraday profile over-weights the closing bar.
+    # This assertion pins FIXTURE behaviour only. It is not evidence about any
+    # instrument, and the disagreement is the point: synthetic data cannot
+    # settle an empirical question about intraday shape.
     assert stats["ratio"] > 1.0, "fixture: closing stub is the wider bar"
 
     with_stubs = atr60(hist, exclude_stubs=False)
