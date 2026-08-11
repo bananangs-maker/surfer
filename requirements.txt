@@ -1,5 +1,10 @@
-flask==3.0.3
-gunicorn==22.0.0
-pandas==2.2.2
-numpy==1.26.4
-yfinance==0.2.65
+# Ranges, not exact pins. The first deploy failed because the app was developed
+# against pandas 3.x while requirements pinned pandas 2.2.2, and tz-aware
+# datetime handling differs between them. The code is now version-neutral and
+# tested against both ends of these ranges; ranges also let pip pick wheels for
+# whatever Python Render defaults to, instead of forcing a source build.
+flask>=3.0,<4
+gunicorn>=22.0,<24
+pandas>=2.2,<4
+numpy>=1.26,<3
+yfinance>=0.2.60

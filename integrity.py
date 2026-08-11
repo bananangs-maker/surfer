@@ -104,11 +104,15 @@ def annotate_sessions(
         )
         dur = (close_dt - ny.iloc[last]).total_seconds() / 60.0
         bar_minutes[last] = max(0.0, min(float(interval_minutes), dur))
-        # interior bars: measure against the next bar's open
+        # Interior bars: measure against the next bar's open.
+        # Uses Series.diff().dt.total_seconds() rather than subtracting
+        # .to_numpy() arrays: on pandas 2.x a tz-aware Series converts to
+        # object dtype, and object / timedelta64 raises UFuncTypeError. This
+        # form behaves identically on pandas 2.x and 3.x.
         if len(pos) > 1:
             deltas = (
-                ny.iloc[pos[1:]].to_numpy() - ny.iloc[pos[:-1]].to_numpy()
-            ) / np.timedelta64(1, "m")
+                ny.iloc[pos].diff().dt.total_seconds().to_numpy()[1:] / 60.0
+            )
             bar_minutes[pos[:-1]] = np.minimum(deltas, float(interval_minutes))
 
     is_stub = bar_minutes < float(interval_minutes) - 1e-9
@@ -173,9 +177,8 @@ def check(
         )
         if len(pos) != expected:
             rep.short_sessions.append((sess, len(pos)))
-        gaps = (
-            sny.to_numpy()[1:] - sny.to_numpy()[:-1]
-        ) / np.timedelta64(1, "m")
+        # Same pandas 2.x/3.x hazard as in annotate_sessions - keep this form.
+        gaps = sny.diff().dt.total_seconds().to_numpy()[1:] / 60.0
         for j, g in enumerate(gaps):
             if g > interval_minutes + 1e-9:
                 rep.grid_gaps.append(
