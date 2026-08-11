@@ -22,7 +22,7 @@ from datetime import date, time
 import numpy as np
 import pandas as pd
 
-from schema import EARLY_CLOSE, NY, REGULAR_CLOSE, SESSION_OPEN
+from .schema import EARLY_CLOSE, NY, REGULAR_CLOSE, SESSION_OPEN
 
 
 @dataclass

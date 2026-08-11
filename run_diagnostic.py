@@ -16,10 +16,10 @@ from __future__ import annotations
 import argparse
 import sys
 
-from surfer import integrity
-from surfer.diagnostics import render_comparison, resolution_comparison
-from surfer.levels import PlaceholderBreakout, stub_range_ratio
-from surfer.schema import Adjustment
+import integrity
+from diagnostics import render_comparison, resolution_comparison
+from levels import PlaceholderBreakout, stub_range_ratio
+from schema import Adjustment
 
 
 def main() -> int:
@@ -35,16 +35,16 @@ def main() -> int:
     args = p.parse_args()
 
     if args.source == "synthetic":
-        from surfer.loaders import load_synthetic
+        from loaders import load_synthetic
         ds = load_synthetic(symbol=args.symbol, n_sessions=args.sessions)
     elif args.source == "yfinance":
-        from surfer.loaders import load_yfinance
+        from loaders import load_yfinance
         ds = load_yfinance(args.symbol)
     else:
         if not args.path:
             print("--path required for firstrate", file=sys.stderr)
             return 2
-        from surfer.loaders import load_firstrate_csv
+        from loaders import load_firstrate_csv
         ds = load_firstrate_csv(args.path, args.symbol,
                                 adjustment=Adjustment.SPLIT_AND_DIVIDEND)
 

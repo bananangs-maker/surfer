@@ -1,0 +1,43 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- Secrets: KIS APP KEY / SECRET, tokens ---
+# A leaked KIS key allows orders on the account it belongs to.
+.env
+.env.*
+# Broad yaml/yml block because KIS sample code keeps credentials in
+# kisdev.yaml. Deploy config must be whitelisted back in explicitly.
+*.yaml
+*.yml
+!render.yaml
+!.github/**/*.yml
+kisdev*
+secrets*
+token*
+*.pem
+*.key
+
+# --- Market data: NEVER commit ---
+# Purchased intraday data (FirstRate etc.) is licensed to you, not
+# redistributable. Committing it to a public repo is redistribution.
+# yfinance caches are large, churn constantly, and belong to Yahoo.
+data/
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.h5
+*.zip
+
+# --- Run artefacts ---
+out/
+logs/
+*.log
+reports/

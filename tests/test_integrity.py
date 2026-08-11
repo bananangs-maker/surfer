@@ -3,11 +3,11 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-import integrity
-from aggregate import to_daily
-from diagnostics import QuarantineError, compute_performance
-from levels import atr60, stub_range_ratio
-from loaders import load_synthetic
+from surfer import integrity
+from surfer.aggregate import to_daily
+from surfer.diagnostics import QuarantineError, compute_performance
+from surfer.levels import atr60, stub_range_ratio
+from surfer.loaders import load_synthetic
 
 NY = "America/New_York"
 

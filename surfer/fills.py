@@ -30,7 +30,7 @@ from enum import Enum
 
 import pandas as pd
 
-from schema import LevelSet, Side
+from .schema import LevelSet, Side
 
 
 class Kind(Enum):

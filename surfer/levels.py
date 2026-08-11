@@ -25,7 +25,7 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 
-from schema import LevelSet, Side
+from .schema import LevelSet, Side
 
 
 class LevelGenerator(Protocol):

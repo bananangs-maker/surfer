@@ -14,12 +14,13 @@ from dataclasses import asdict
 
 from flask import Flask, render_template, request
 
-from surfer import integrity
-from surfer.diagnostics import resolution_comparison
-from surfer.levels import PlaceholderBreakout, stub_range_ratio
-from surfer.schema import Dataset
+import integrity
+from diagnostics import resolution_comparison
+from levels import PlaceholderBreakout, stub_range_ratio
+from schema import Dataset
 
-app = Flask(__name__)
+# template_folder="." keeps the HTML at the repo root - no subfolders anywhere.
+app = Flask(__name__, template_folder=".")
 
 SYMBOLS = {
     "TQQQ": "ProShares UltraPro QQQ (3x Nasdaq-100)",
@@ -38,10 +39,10 @@ def get_dataset(symbol: str) -> Dataset:
         return hit[1]
 
     if symbol == "SYNTH3X":
-        from surfer.loaders import load_synthetic
+        from loaders import load_synthetic
         ds = load_synthetic(n_sessions=400)
     else:
-        from surfer.loaders import load_yfinance
+        from loaders import load_yfinance
         ds = load_yfinance(symbol)
 
     _CACHE[symbol] = (time.time(), ds)
@@ -99,7 +100,7 @@ def index():
         ctx["error"] = f"{type(e).__name__}: {e}"
         ctx["trace"] = traceback.format_exc()
 
-    return render_template("report.html", **ctx)
+    return render_template("report_template.html", **ctx)
 
 
 @app.route("/healthz")

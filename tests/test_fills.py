@@ -10,8 +10,8 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from fills import Kind, NoFill, adjudicate_session
-from schema import LevelSet, Side
+from surfer.fills import Kind, NoFill, adjudicate_session
+from surfer.schema import LevelSet, Side
 
 SD = date(2025, 3, 3)
 
