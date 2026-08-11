@@ -98,3 +98,82 @@ def test_head_request_on_root_is_also_cheap(client):
     r = client.head("/")
     assert r.status_code == 200
     assert time.perf_counter() - t0 < 0.5
+
+
+def test_verdict_uses_absolute_sessions_not_relative_reduction(client):
+    """Guards a metric that was actively misleading.
+
+    The relative reduction in ambiguity rate peaks where intraday data is least
+    worth buying: widen the stop until daily ambiguity is near zero and the
+    ratio approaches 100% while almost no sessions change outcome. The verdict
+    must lead with the count of sessions rescued.
+    """
+    html = client.get("/?run=1&symbol=SYNTH3X").data.decode()
+    assert "구제된 세션" in html
+    assert "상대 감소율(%)에 기대지 마세요" in html
+
+
+def test_wider_stops_rescue_fewer_sessions(client):
+    """The relative ratio rises with stop distance while the absolute benefit
+    falls. Pin the absolute direction, since that is the decision quantity."""
+    import re
+
+    def rescued(qs):
+        html = client.get(qs).data.decode()
+        return int(re.search(r'verdict-num">(\d+)<', html).group(1))
+
+    tight = rescued("/?run=1&symbol=SYNTH3X&stop=1.2")
+    wide = rescued("/?run=1&symbol=SYNTH3X&stop=3.0")
+    assert wide < tight, f"wide={wide} tight={tight}"
+
+
+# --- annotated chart ------------------------------------------------------
+
+def test_diagnostic_page_embeds_a_generated_chart(client):
+    """The illustration is drawn from the same data the diagnostic counts, so it
+    cannot drift from the numbers printed under it. A hand-drawn diagram could."""
+    html = client.get("/?run=1&symbol=SYNTH3X").data.decode()
+    assert "<svg viewBox" in html
+    assert "ENTRY BAND" in html
+    assert "TRIGGER" in html and "STOP" in html
+
+
+def test_chart_svg_contains_no_hangul():
+    """Barlow has no Hangul glyphs, so Korean inside the SVG falls back
+    unpredictably. Korean belongs in the HTML legend, not the drawing."""
+    import re
+
+    from chart import annotated_session_svg, pick_example
+    from levels import PlaceholderBreakout
+    from loaders import load_synthetic
+
+    ex = pick_example(load_synthetic(n_sessions=150), PlaceholderBreakout())
+    assert ex is not None
+    svg = annotated_session_svg(*ex)
+    body = re.sub(r'aria-label="[^"]*"', "", svg)
+    assert not re.findall(r"[가-힣]", body)
+
+
+def test_right_rail_price_boxes_do_not_overlap():
+    """Trigger and limit can sit close together; their boxes and labels must not
+    collide, or both numbers become unreadable."""
+    import re
+
+    from chart import annotated_session_svg, pick_example
+    from levels import PlaceholderBreakout
+    from loaders import load_synthetic
+
+    ex = pick_example(load_synthetic(n_sessions=150), PlaceholderBreakout())
+    svg = annotated_session_svg(*ex)
+    ys = [float(m) for m in re.findall(r'<rect x="780" y="([\d.]+)" width="88"', svg)]
+    assert len(ys) == 3
+    for a, b in zip(sorted(ys), sorted(ys)[1:]):
+        # 20px box plus room for the label drawn above the lower one.
+        assert b - a >= 20, f"price boxes overlap: {sorted(ys)}"
+
+
+def test_backtest_page_renders_a_verdict(client):
+    html = client.get("/backtest?symbol=SYNTH3X&candidate=A").data.decode()
+    assert "실행 실패" not in html
+    assert "class=\"final" in html
+    assert "바이앤홀드" in html

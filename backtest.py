@@ -155,6 +155,113 @@ def _stats(trades: list[Trade]) -> dict:
     }
 
 
+SESSIONS_PER_YEAR = 252
+
+
+def curve_metrics(curve: list[tuple[date, float]]) -> dict:
+    """Time-indexed metrics from a session-by-session equity curve.
+
+    Every figure here is measured against sessions elapsed, which is what makes
+    it comparable with a buy-and-hold series. Calmar is CAGR / |MDD| per
+    SURFER-DES-002 §2.2; Sharpe is deliberately absent, because on a 3x
+    instrument the binding risk is the depth of the drawdown, not the standard
+    deviation of returns.
+    """
+    if len(curve) < 2:
+        return {"n_sessions": len(curve)}
+    vals = np.array([v for _, v in curve], dtype=float)
+    peak = np.maximum.accumulate(vals)
+    dd = vals / peak - 1.0
+    mdd = float(dd.min())
+    total = float(vals[-1] / vals[0] - 1.0)
+    years = len(vals) / SESSIONS_PER_YEAR
+    cagr = float((vals[-1] / vals[0]) ** (1.0 / years) - 1.0) if years > 0 else 0.0
+
+    # Longest stretch spent below a previous peak, in sessions.
+    under = 0
+    longest = 0
+    for x in dd:
+        under = under + 1 if x < -1e-12 else 0
+        longest = max(longest, under)
+
+    return {
+        "n_sessions": len(vals),
+        "total_return": total,
+        "cagr": cagr,
+        "max_drawdown": mdd,
+        "calmar": cagr / abs(mdd) if mdd < -1e-12 else float("inf"),
+        "longest_underwater_sessions": longest,
+        "final_equity": float(vals[-1]),
+    }
+
+
+def buy_and_hold(
+    ds: Dataset, costs: Costs | None = None, starting_equity: float = 10_000.0
+) -> list[tuple[date, float]]:
+    """The SURFER-DES-002 baseline: buy at the first session's open, hold.
+
+    Costs are charged once, on the single entry. Charging the baseline nothing at
+    all would flatter SURFER by comparison, and the point of a baseline is that
+    it be beatable only on merit.
+    """
+    costs = costs or Costs()
+    by = {
+        d: g.sort_values("ts").reset_index(drop=True)
+        for d, g in ds.bars.groupby("session_date", sort=True)
+    }
+    sessions = ds.sessions
+    first = by[sessions[0]]
+    entry = costs.buy_price(float(first["open"].iloc[0]), at_gap=False)
+    shares = (starting_equity - costs.commission(starting_equity / entry)) / entry
+    return [
+        (d, shares * float(by[d]["close"].iloc[-1])) for d in sessions
+    ]
+
+
+def verdict(
+    surfer_curve: list[tuple[date, float]],
+    bh_curve: list[tuple[date, float]],
+    calmar_multiple_required: float = 1.5,
+    mdd_share_allowed: float = 0.50,
+) -> dict:
+    """Apply SURFER-DES-002 §2.2 and §2.3. Both must pass; they are independent.
+
+    Thresholds are the pre-registered ones and are arguments only so the test
+    suite can pin them - not so they can be tuned after seeing a result.
+    """
+    s = curve_metrics(surfer_curve)
+    b = curve_metrics(bh_curve)
+
+    # A multiplicative threshold inverts when the baseline is negative: with B&H
+    # Calmar at -0.50, "1.5x" asks for >= -0.75, which a money-losing system
+    # clears. SURFER-DES-002 §3.3 puts 2022 inside the measured windows, so this
+    # is not hypothetical. When the baseline is not positive the multiple is
+    # meaningless and the requirement becomes an absolute one: SURFER's own
+    # Calmar must be positive. That is strictly harder than the broken form, so
+    # repairing it cannot flatter the result.
+    if b["calmar"] > 0:
+        required = calmar_multiple_required * b["calmar"]
+        calmar_ok = s["calmar"] >= required
+    else:
+        required = 0.0
+        calmar_ok = s["calmar"] > 0.0
+    # Positive Calmar is necessary in every case: a negative one means the CAGR
+    # itself is negative.
+    calmar_ok = calmar_ok and s["calmar"] > 0.0
+
+    mdd_ok = abs(s["max_drawdown"]) <= mdd_share_allowed * abs(b["max_drawdown"])
+    return {
+        "surfer": s,
+        "buy_and_hold": b,
+        "calmar_required": required,
+        "baseline_calmar_positive": bool(b["calmar"] > 0),
+        "calmar_pass": bool(calmar_ok),
+        "mdd_allowed": -mdd_share_allowed * abs(b["max_drawdown"]),
+        "mdd_pass": bool(mdd_ok),
+        "pass": bool(calmar_ok and mdd_ok),
+    }
+
+
 class QuarantineError(RuntimeError):
     pass
 
@@ -193,7 +300,13 @@ def run_backtest(
 
     trades: list[Trade] = []
     equity_curve: list[tuple[date, float]] = []
-    equity = starting_equity
+    # Cash and shares tracked separately so an open position can be marked to
+    # the session close. Compounding realised returns at exit only produces a
+    # TRADE-INDEXED curve, whose drawdown cannot be compared with a buy-and-hold
+    # drawdown measured over TIME. That mismatch, not the size of the intra-trade
+    # excursion, is what made the previous method unusable for SURFER-DES-002.
+    cash = starting_equity
+    shares_held = 0.0
     carried: Position | None = None
     live: Trade | None = None
     in_position_sessions = 0
@@ -222,7 +335,9 @@ def run_backtest(
             in_position_sessions += 1
             raw = out.entry.price
             net = costs.buy_price(raw, out.entry.at_gap)
-            shares = (equity * fraction) / net
+            shares = (cash * fraction) / net
+            cash -= shares * net + costs.commission(shares)
+            shares_held = shares
             live = Trade(
                 entry_date=sd,
                 entry_ts=out.entry.ts,
@@ -249,9 +364,10 @@ def run_backtest(
             live.sessions_held = (
                 carried.sessions_held + 1 if carried is not None else 0
             )
-            live.commission += costs.commission(live.shares)
-            r = live.net_return(equity)
-            equity *= 1.0 + (r or 0.0)
+            exit_commission = costs.commission(live.shares)
+            live.commission += exit_commission
+            cash += live.shares * net - exit_commission
+            shares_held = 0.0
             trades.append(live)
             live = None
             carried = None
@@ -263,7 +379,9 @@ def run_backtest(
                 # corrupt every number downstream.
                 notes.append(f"{sd}: carried position without a live trade")
 
-        equity_curve.append((sd, equity))
+        # Mark to the session close, every session, in position or not.
+        close_px = float(bars["close"].iloc[-1])
+        equity_curve.append((sd, cash + shares_held * close_px))
 
     open_trade = live
     if open_trade is not None:
@@ -291,7 +409,7 @@ def run_backtest(
     )
 
 
-def render(res: BacktestResult) -> str:
+def render(res: BacktestResult, bh_curve=None) -> str:
     all_s = _stats(res.closed_trades)
     un_s = _stats(res.unambiguous_trades)
 
@@ -351,6 +469,31 @@ def render(res: BacktestResult) -> str:
             f"  return attributable to assumed ordering: {drift:+.2%}",
             "  If that figure is large relative to the total, the result rests",
             "  on intra-bar ordering the data cannot observe.",
+        ]
+    m = curve_metrics(res.equity)
+    lines += [
+        "",
+        "  TIME-INDEXED (session mark-to-market) - the axis DES-002 judges on",
+        f"  {'CAGR':<26}{m['cagr']:>13.2%}",
+        f"  {'max drawdown':<26}{m['max_drawdown']:>13.2%}",
+        f"  {'Calmar (CAGR/|MDD|)':<26}{m['calmar']:>13.2f}",
+        f"  {'longest underwater':<26}{m['longest_underwater_sessions']:>10} sessions",
+    ]
+    if bh_curve is not None:
+        v = verdict(res.equity, bh_curve)
+        b = v["buy_and_hold"]
+        lines += [
+            "",
+            "  vs BUY AND HOLD (DES-002 baseline)",
+            f"  {'B&H CAGR':<26}{b['cagr']:>13.2%}",
+            f"  {'B&H max drawdown':<26}{b['max_drawdown']:>13.2%}",
+            f"  {'B&H Calmar':<26}{b['calmar']:>13.2f}",
+            "",
+            f"  §2.2 Calmar >= {v['calmar_required']:.2f} (1.5x B&H) "
+            f"-> {'PASS' if v['calmar_pass'] else 'FAIL'}",
+            f"  §2.3 MDD >= {v['mdd_allowed']:.2%} (50% of B&H) "
+            f"-> {'PASS' if v['mdd_pass'] else 'FAIL'}",
+            f"  VERDICT: {'PASS' if v['pass'] else 'FAIL'}",
         ]
     for n in res.notes[:6]:
         lines.append(f"  note: {n}")

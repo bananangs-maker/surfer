@@ -19,6 +19,40 @@ from schema import BAR_COLUMNS, EARLY_CLOSE, NY, Adjustment, Dataset
 MAX_LOOKBACK_DAYS = 730
 
 
+class IntervalMismatch(ValueError):
+    pass
+
+
+def assert_interval(df: pd.DataFrame, expected_minutes: int, tolerance: float = 0.6) -> float:
+    """Raise unless the modal gap between consecutive bars matches expectation.
+
+    Measured within sessions only, so the overnight gap does not skew the mode.
+    Returns the observed modal spacing.
+    """
+    ny = df["ts"].dt.tz_convert(NY)
+    same_day = ny.dt.date.to_numpy()[1:] == ny.dt.date.to_numpy()[:-1]
+    gaps = ny.diff().dt.total_seconds().to_numpy()[1:] / 60.0
+    intra = gaps[same_day]
+    if len(intra) == 0:
+        raise IntervalMismatch("cannot determine bar spacing: no intraday pairs")
+    vals, counts = np.unique(np.round(intra).astype(int), return_counts=True)
+    modal = int(vals[counts.argmax()])
+    share = counts.max() / counts.sum()
+    if modal != expected_minutes:
+        raise IntervalMismatch(
+            f"file spacing is {modal} minutes ({share:.0%} of intraday gaps) but "
+            f"{expected_minutes} was expected. Loading it anyway would mislabel "
+            f"every bar as a stub and silently corrupt ATR, levels and the "
+            f"ambiguity rate. Check which FirstRate file was downloaded."
+        )
+    if share < tolerance:
+        raise IntervalMismatch(
+            f"spacing is irregular: only {share:.0%} of intraday gaps are "
+            f"{modal} minutes. Inspect the file before use."
+        )
+    return float(modal)
+
+
 # ============================================================
 # from yfinance_loader
 def load_yfinance(
@@ -103,6 +137,14 @@ def load_firstrate_csv(
         df = df[(ny.dt.time >= time(9, 30)) & (ny.dt.time < time(16, 0))]
 
     df = df.sort_values("ts").reset_index(drop=True)
+
+    # Verify the file's actual spacing before declaring it 60-minute data.
+    # A 30-minute file loaded as 60-minute passes silently: every bar is
+    # mislabelled as a stub, and ATR, levels and the ambiguity rate all come out
+    # wrong without a single error. FirstRate sells both, and the filenames
+    # differ by one word.
+    assert_interval(df, expected_minutes=60)
+
     df = annotate_sessions(df, interval_minutes=60)
 
     return Dataset(

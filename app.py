@@ -15,8 +15,13 @@ from dataclasses import asdict
 from flask import Flask, render_template, request
 
 import integrity
-from diagnostics import resolution_comparison
-from levels import PlaceholderBreakout, stub_range_ratio
+from diagnostics import purchase_case, resolution_comparison
+from backtest import Costs, buy_and_hold, curve_metrics, run_backtest, verdict
+from chart import annotated_session_svg, pick_example
+from levels import (PlaceholderBreakout, PriorCloseVolatilityBreakout,
+                    PullbackToPriorLow, StructuralExit, VolatilityRegimeGate,
+                    stub_range_ratio)
+from windows import SELECTION_END, Unlock, describe_windows, selection_slice
 from schema import Dataset
 
 # template_folder="." keeps the HTML at the repo root - no subfolders anywhere.
@@ -65,6 +70,11 @@ def index():
         "params": {"trigger": trigger, "limit": limit, "stop": stop},
         "error": None,
         "ran": False,
+        "chart_svg": None,
+        "has_ambiguous": False,
+        # Present on every render so the idle and error branches cannot blow up
+        # in the template. Two tests failed exactly this way.
+        "case": None,
     }
 
     # The landing page must answer instantly. Render's port scanner probes "/"
@@ -85,6 +95,16 @@ def index():
         gen = PlaceholderBreakout(
             trigger_atr_mult=trigger, limit_atr_mult=limit, stop_atr_mult=stop
         )
+        # Drawn from the same data the diagnostic counts, so the illustration
+        # cannot drift from what is reported below it.
+        ex = pick_example(ds, gen)
+        if ex is not None:
+            hist, sess, lv, amb = ex
+            ctx["chart_svg"] = annotated_session_svg(
+                hist, sess, lv, amb, title=f"SURFER | {symbol}"
+            )
+            ctx["has_ambiguous"] = amb is not None
+
         r60, r1d = resolution_comparison(ds, gen)
 
         reduction = (
@@ -101,6 +121,7 @@ def index():
                 "r60": r60,
                 "r1d": r1d,
                 "reduction": reduction,
+                "case": purchase_case(r60, r1d),
                 "elapsed": time.time() - t0,
                 "generator": gen.name,
             }
@@ -110,6 +131,77 @@ def index():
         ctx["trace"] = traceback.format_exc()
 
     return render_template("report_template.html", **ctx)
+
+
+CANDIDATES = {
+    "A": ("고가 돌파", PlaceholderBreakout),
+    "B": ("저가 되돌림", PullbackToPriorLow),
+    "C": ("종가 변동성 돌파", PriorCloseVolatilityBreakout),
+    "D": ("A + 변동성 게이트", VolatilityRegimeGate),
+}
+
+
+@app.route("/backtest")
+def backtest_view():
+    """Backtest, gated by the SURFER-DES-002 §3.3 window lock.
+
+    The available price source (yfinance, 730 days) lies ENTIRELY inside the
+    validation window. Running a performance backtest on it here would open that
+    window through the back door - the one place where it is easiest to do by
+    accident, since it is a button on a web page. So real symbols are refused
+    until the lock record exists; the synthetic fixture stays available because
+    it contains no market information to leak.
+    """
+    symbol = request.args.get("symbol", "SYNTH3X").upper()
+    cand = request.args.get("candidate", "A").upper()
+    if cand not in CANDIDATES:
+        cand = "A"
+
+    ctx = {"symbols": SYMBOLS, "symbol": symbol, "candidates": CANDIDATES,
+           "candidate": cand, "blocked": None, "unlock": Unlock.load()}
+    try:
+        ds = get_dataset(symbol)
+        ctx["windows"] = describe_windows(ds)
+
+        # The lock restricts the WINDOW, not the symbol. While locked, a real
+        # symbol is run on its selection slice; only post-2019 sessions are
+        # withheld. Blocking the symbol outright (an earlier version of this)
+        # made the selection window unreachable too, which is not what §3.3 says.
+        ds_used = ds
+        if symbol != "SYNTH3X" and Unlock.load() is None:
+            ds_used = selection_slice(ds)
+            n_withheld = len(ds.sessions) - len(ds_used.sessions)
+            if len(ds_used.sessions) < 60:
+                ctx["blocked"] = (
+                    f"{symbol}의 선택 구간 데이터가 {len(ds_used.sessions)}세션뿐입니다 "
+                    f"(검증 구간 {n_withheld}세션은 잠김). "
+                    f"DES-002 §3.3에 따라 후보 선택 확정 전에는 {SELECTION_END} 이후를 "
+                    f"열 수 없습니다. 선택 구간 데이터를 확보한 뒤 진행하세요."
+                )
+                return render_template("backtest.html", **ctx)
+            ctx["window_note"] = (
+                f"선택 구간만 사용 중 — {len(ds_used.sessions)}세션. "
+                f"{SELECTION_END} 이후 {n_withheld}세션은 잠겨 있습니다."
+            )
+
+        _, G = CANDIDATES[cand]
+        res = run_backtest(ds_used, G(), exit_rule=StructuralExit(),
+                           costs=Costs(), acknowledge_quarantine=True)
+        bh = buy_and_hold(ds_used, costs=Costs())
+        ctx.update({
+            "res": res,
+            "v": verdict(res.equity, bh),
+            "trade_stats": __import__("backtest")._stats(res.closed_trades),
+            "amb_share": (
+                sum(1 for t in res.closed_trades if t.ambiguous)
+                / len(res.closed_trades) if res.closed_trades else 0.0
+            ),
+        })
+    except Exception as e:
+        import traceback
+        ctx["error"] = f"{type(e).__name__}: {e}"
+        ctx["trace"] = traceback.format_exc()
+    return render_template("backtest.html", **ctx)
 
 
 @app.route("/healthz")

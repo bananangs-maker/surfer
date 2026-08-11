@@ -9,36 +9,36 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#FBFAF4;
-    --shallow:#E4EFF3;
-    --deep:#CBDFE8;
-    --shoal:#EFE3C6;
-    --ink:#17303E;
-    --sounding:#5E7C8B;
-    --caution:#B31777;
-    --rule:rgba(23,48,62,.18);
-    --rule-soft:rgba(23,48,62,.09);
+    /* Monochrome, after the reference chart study. Direction and emphasis are
+       carried by fill and stroke weight, never by hue - a greyscale sheet cannot
+       imply that one outcome is the good one. */
+    --paper:#EDEDEB;
+    --panel:#FFFFFF;
+    --ink:#111111;
+    --zone-1:#D9D9D7;
+    --zone-2:#C4C4C2;
+    --zone-3:#A8A8A6;
+    --muted:#8A8A88;
+    --hair:rgba(17,17,17,.22);
+    --hair-soft:rgba(17,17,17,.10);
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
   body{
     margin:0; background:var(--paper); color:var(--ink);
     font-family:'Barlow',system-ui,sans-serif; font-size:16px; line-height:1.55;
-    background-image:
-      linear-gradient(var(--rule-soft) 1px,transparent 1px),
-      linear-gradient(90deg,var(--rule-soft) 1px,transparent 1px);
-    background-size:44px 44px;
+
   }
   .wrap{max-width:1080px; margin:0 auto; padding:32px 20px 96px}
 
   /* ---- title block (chart cartouche) ---- */
   .cartouche{
-    border:1.5px solid var(--ink); background:var(--paper);
+    border:1px solid var(--ink); background:var(--panel);
     padding:22px 24px; margin-bottom:28px;
   }
   .cartouche-top{
     display:flex; flex-wrap:wrap; gap:6px 18px; align-items:baseline;
-    border-bottom:1px solid var(--rule); padding-bottom:14px; margin-bottom:14px;
+    border-bottom:1px solid var(--hair); padding-bottom:14px; margin-bottom:14px;
   }
   .mark{
     font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:38px;
@@ -46,26 +46,26 @@
   }
   .mark-sub{
     font-family:'Barlow Condensed',sans-serif; font-weight:500; font-size:15px;
-    letter-spacing:.3em; text-transform:uppercase; color:var(--sounding);
+    letter-spacing:.3em; text-transform:uppercase; color:var(--muted);
   }
   .cartouche-grid{
     display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px 26px;
   }
   .field-label{
     font-family:'Barlow Condensed',sans-serif; font-size:12px; letter-spacing:.2em;
-    text-transform:uppercase; color:var(--sounding); display:block; margin-bottom:2px;
+    text-transform:uppercase; color:var(--muted); display:block; margin-bottom:2px;
   }
   .field-value{font-family:'IBM Plex Mono',monospace; font-size:14px; word-break:break-word}
-  .hydro{font-style:italic; color:var(--sounding)}
+  .hydro{font-style:italic; color:var(--muted)}
 
   /* ---- caution ---- */
   .caution{
-    border:1.5px solid var(--caution); border-left-width:7px;
+    border:1.5px solid var(--ink); border-left-width:6px;
     padding:16px 20px; margin-bottom:28px; background:rgba(179,23,119,.045);
   }
   .caution-tag{
     font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px;
-    letter-spacing:.24em; text-transform:uppercase; color:var(--caution);
+    letter-spacing:.24em; text-transform:uppercase; color:var(--ink);
     display:block; margin-bottom:6px;
   }
   .caution p{margin:0 0 8px}
@@ -81,21 +81,30 @@
     font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:20px;
     letter-spacing:.16em; text-transform:uppercase; margin:0;
   }
-  .band-note{font-size:14px; color:var(--sounding); font-style:italic}
+  .band-note{font-size:14px; color:var(--muted); font-style:italic}
 
   /* ---- signature: the sounding diagram ---- */
-  .plate{border:1px solid var(--rule); background:#fff; padding:8px}
+  .plate{border:1px solid var(--ink); background:var(--panel); padding:0; overflow:hidden}
+  .plate svg{display:block; width:100%; height:auto}
+  .legend{list-style:none; margin:18px 0 0; padding:0}
+  .legend li{position:relative; padding:9px 0 9px 34px; border-bottom:1px solid var(--hair-soft); font-size:15px}
+  .legend .n{
+    position:absolute; left:0; top:9px; width:20px; height:20px; border-radius:50%;
+    border:1.2px solid var(--ink); display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600;
+  }
+  .legend strong{font-family:'Barlow Condensed',sans-serif; letter-spacing:.14em}
   .plate svg{display:block; width:100%; height:auto}
   .plate-cap{
-    font-size:14px; color:var(--sounding); padding:10px 6px 4px; margin:0;
+    font-size:14px; color:var(--muted); padding:10px 6px 4px; margin:0;
   }
 
   /* ---- readout ---- */
   .readout{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1.5px solid var(--ink)}
   .col{padding:20px}
   .col + .col{border-left:1.5px solid var(--ink)}
-  .col-daily{background:var(--deep)}
-  .col-60{background:var(--shallow)}
+  .col-daily{background:var(--zone-2)}
+  .col-60{background:var(--zone-1)}
   .col-tag{
     font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px;
     letter-spacing:.22em; text-transform:uppercase; display:block; margin-bottom:12px;
@@ -106,7 +115,7 @@
   }
   .big-cap{
     font-family:'Barlow Condensed',sans-serif; font-size:13px; letter-spacing:.14em;
-    text-transform:uppercase; color:var(--sounding); margin-top:6px; display:block;
+    text-transform:uppercase; color:var(--muted); margin-top:6px; display:block;
   }
   .verdict{
     border:1.5px solid var(--ink); border-top:none; padding:18px 20px;
@@ -116,19 +125,19 @@
 
   /* ---- tables ---- */
   .tbl{width:100%; border-collapse:collapse; font-size:15px}
-  .tbl th,.tbl td{padding:8px 10px; border-bottom:1px solid var(--rule-soft); text-align:right}
+  .tbl th,.tbl td{padding:8px 10px; border-bottom:1px solid var(--hair-soft); text-align:right}
   .tbl th:first-child,.tbl td:first-child{text-align:left}
   .tbl thead th{
     font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:12px;
-    letter-spacing:.18em; text-transform:uppercase; color:var(--sounding);
+    letter-spacing:.18em; text-transform:uppercase; color:var(--muted);
     border-bottom:1.5px solid var(--ink);
   }
   .tbl td.num{font-family:'IBM Plex Mono',monospace}
-  .tbl tr.accent td{background:var(--shoal); font-weight:500}
+  .tbl tr.accent td{background:var(--zone-1); font-weight:500}
 
   /* ---- controls ---- */
   .controls{
-    border:1.5px solid var(--ink); background:var(--paper);
+    border:1px solid var(--ink); background:var(--panel);
     padding:18px 20px; margin-bottom:28px;
     display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px 18px;
     align-items:end;
@@ -145,32 +154,41 @@
     padding:10px 22px; border:1.5px solid var(--ink); background:var(--ink);
     color:var(--paper); cursor:pointer; border-radius:0;
   }
-  button:hover{background:var(--caution); border-color:var(--caution)}
+  button:hover{background:var(--panel); color:var(--ink)}
   a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{
-    outline:2.5px solid var(--caution); outline-offset:2px;
+    outline:2.5px solid var(--ink); outline-offset:2px;
   }
 
   .flags{list-style:none; padding:0; margin:12px 0 0; font-size:14px}
   .flags li{
     font-family:'IBM Plex Mono',monospace; padding:5px 0;
-    border-bottom:1px dotted var(--rule);
+    border-bottom:1px dotted var(--hair);
   }
   .foot{
-    margin-top:40px; padding-top:16px; border-top:1px solid var(--rule);
-    font-size:14px; color:var(--sounding);
+    margin-top:40px; padding-top:16px; border-top:1px solid var(--hair);
+    font-size:14px; color:var(--muted);
   }
   .err{
-    border:1.5px solid var(--caution); padding:18px 20px; background:#fff;
+    border:1.5px solid var(--ink); padding:18px 20px; background:#fff;
   }
   .err pre{
     overflow-x:auto; font-family:'IBM Plex Mono',monospace; font-size:12px;
-    background:var(--shallow); padding:12px; margin:12px 0 0;
+    background:var(--zone-1); padding:12px; margin:12px 0 0;
   }
   @media (max-width:680px){
     .readout{grid-template-columns:1fr}
     .col + .col{border-left:none; border-top:1.5px solid var(--ink)}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+
+  /* Korean does not take Latin tracking. The reference sheet's wide letter-
+     spacing belongs to uppercase Latin only - applied to Hangul it stretches
+     syllable blocks apart and hurts legibility. Wordmark and chart labels keep
+     it; Korean UI text does not. */
+  .field-label, .caution-tag, .col-tag, .band-title, .final,
+  .pass, .fail, button, .tbl thead th{ letter-spacing:.02em }
+  .mark{ letter-spacing:.22em }
+  .mark-sub{ letter-spacing:.26em }
 </style>
 </head>
 <body>
@@ -264,66 +282,35 @@
 
   <section class="band">
     <div class="band-head">
-      <h2 class="band-title">모호율이 무엇을 뜻하는가</h2>
-      <span class="band-note">봉 하나 안에 두 레벨이 들어가면 순서를 알 수 없습니다</span>
+      <h2 class="band-title">레벨은 어떻게 놓이는가</h2>
+      <span class="band-note">실제 봉에 실제 레벨을 얹은 것 — 설명도가 아닙니다</span>
     </div>
-    <div class="plate">
-      <svg viewBox="0 0 720 300" role="img"
-           aria-label="일봉 하나에는 진입선과 손절선이 같은 봉 안에 들어가 순서를 알 수 없고, 60분봉 일곱 개로 쪼개면 두 선이 서로 다른 봉에 들어가 순서가 관측된다는 비교 도해">
-        <defs>
-          <pattern id="unknown" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-            <line x1="0" y1="0" x2="0" y2="7" stroke="#B31777" stroke-width="1.6" opacity=".33"/>
-          </pattern>
-        </defs>
-
-        <!-- shared level lines -->
-        <line x1="16" y1="96"  x2="704" y2="96"  stroke="#17303E" stroke-width="1.2" stroke-dasharray="7 5"/>
-        <line x1="16" y1="214" x2="704" y2="214" stroke="#B31777" stroke-width="1.2" stroke-dasharray="7 5"/>
-        <text x="16" y="88"  font-family="'Barlow Condensed',sans-serif" font-size="13" letter-spacing="1.8" fill="#17303E">진입 트리거</text>
-        <text x="16" y="232" font-family="'Barlow Condensed',sans-serif" font-size="13" letter-spacing="1.8" fill="#B31777">손절</text>
-
-        <!-- LEFT: one daily bar -->
-        <text x="60" y="34" font-family="'Barlow Condensed',sans-serif" font-size="15" font-weight="600" letter-spacing="2.6" fill="#17303E">일봉 1개</text>
-        <rect x="120" y="56" width="76" height="196" fill="url(#unknown)" stroke="#17303E" stroke-width="1.6"/>
-        <line x1="158" y1="46" x2="158" y2="56" stroke="#17303E" stroke-width="1.6"/>
-        <line x1="158" y1="252" x2="158" y2="264" stroke="#17303E" stroke-width="1.6"/>
-        <circle cx="158" cy="96"  r="5.5" fill="#fff" stroke="#17303E" stroke-width="1.8"/>
-        <circle cx="158" cy="214" r="5.5" fill="#fff" stroke="#B31777" stroke-width="1.8"/>
-        <text x="240" y="146" font-family="'IBM Plex Mono',monospace" font-size="30" font-weight="600" fill="#B31777">?</text>
-        <text x="240" y="176" font-family="'Barlow',sans-serif" font-size="14" fill="#17303E">두 레벨이 같은 봉 안 —</text>
-        <text x="240" y="196" font-family="'Barlow',sans-serif" font-size="14" fill="#17303E">어느 쪽이 먼저 닿았는지</text>
-        <text x="240" y="216" font-family="'Barlow',sans-serif" font-size="14" fill="#17303E">데이터가 말해주지 않음</text>
-
-        <!-- divider -->
-        <line x1="404" y1="24" x2="404" y2="284" stroke="#17303E" stroke-width="1" opacity=".3"/>
-
-        <!-- RIGHT: seven 60m bars -->
-        <text x="430" y="34" font-family="'Barlow Condensed',sans-serif" font-size="15" font-weight="600" letter-spacing="2.6" fill="#17303E">60분봉 7개</text>
-        <!-- bar 1 -->
-        <rect x="432" y="132" width="24" height="42" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
-        <!-- bar 2: touches entry -->
-        <rect x="470" y="84" width="24" height="58" fill="#E4EFF3" stroke="#17303E" stroke-width="1.6"/>
-        <circle cx="482" cy="96" r="5" fill="#fff" stroke="#17303E" stroke-width="1.8"/>
-        <text x="470" y="74" font-family="'IBM Plex Mono',monospace" font-size="12" font-weight="600" fill="#17303E">1</text>
-        <!-- bars 3-4 -->
-        <rect x="508" y="100" width="24" height="52" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
-        <rect x="546" y="126" width="24" height="56" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
-        <!-- bar 5: touches stop -->
-        <rect x="584" y="164" width="24" height="62" fill="#EFE3C6" stroke="#B31777" stroke-width="1.6"/>
-        <circle cx="596" cy="214" r="5" fill="#fff" stroke="#B31777" stroke-width="1.8"/>
-        <text x="584" y="246" font-family="'IBM Plex Mono',monospace" font-size="12" font-weight="600" fill="#B31777">2</text>
-        <!-- bars 6-7 (7 = stub, half width) -->
-        <rect x="622" y="150" width="24" height="48" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
-        <rect x="660" y="140" width="12" height="54" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
-        <text x="646" y="272" font-family="'Barlow',sans-serif" font-size="12" font-style="italic" fill="#5E7C8B">↑ 15:30 반쪽봉</text>
-        <text x="432" y="292" font-family="'Barlow',sans-serif" font-size="14" fill="#17303E">진입이 먼저, 손절이 나중 — 순서가 관측됨</text>
-      </svg>
-      <p class="plate-cap">
-        같은 하루입니다. 왼쪽은 하루를 봉 하나로 보고, 오른쪽은 일곱 개로 쪼개서 봅니다.
-        쪼개면 두 레벨이 서로 다른 봉에 들어가서 어느 쪽이 먼저였는지 보입니다.
-        <strong>모호율</strong>은 쪼개도 여전히 한 봉 안에 겹치는 세션의 비율입니다 — 낮을수록 좋습니다.
-      </p>
-    </div>
+    {% if chart_svg %}
+    <div class="plate">{{ chart_svg|safe }}</div>
+    <ol class="legend">
+      <li><span class="n">1</span><strong>TRIGGER</strong> — 진입이 발동하는 가격.
+        돌파 후보는 이 위로 올라가야, 되돌림 후보는 이 아래로 내려와야 체결됩니다.</li>
+      <li><span class="n">2</span><strong>LIMIT</strong> — 받아들일 최악의 체결가.
+        돌파에서는 천장이고 되돌림에서는 바닥입니다. 갭이 이 선을 넘어가면
+        <em>체결하지 않고 넘어갑니다</em> — 놓친 거래는 손실이 아닙니다.</li>
+      <li><span class="n">3</span><strong>STOP</strong> — 진입 시점에 고정되는 손절.
+        이후 움직이지 않습니다. 구조 청산이 이 위로 올라오면 그쪽이 정상 퇴출 경로가
+        되고, 이 선은 바닥으로만 남습니다.</li>
+      {% if has_ambiguous %}
+      <li><span class="n">4</span><strong>AMBIGUOUS BAR</strong> — 진입선과 손절선이
+        <em>같은 봉 안에</em> 들어간 봉. 봉 데이터는 어느 쪽이 먼저 닿았는지 말해주지
+        않습니다. 엔진은 항상 불리한 순서(체결 후 즉시 손절)를 가정하고 그 봉을
+        표시합니다. 아래의 <strong>모호율</strong>이 이런 세션의 비율입니다.</li>
+      {% endif %}
+    </ol>
+    <p class="band-note" style="display:block; margin-top:10px">
+      점선 왼쪽은 이미 닫힌 세션입니다. 모든 레벨이 거기서만 도출되고, 개장 전에
+      대기 주문으로 제출됩니다 — 장중 봉 종가에 반응하지 않는다는 설계가 그림에
+      그대로 드러납니다.
+    </p>
+    {% else %}
+    <p class="hydro">차트를 그릴 표본 세션을 찾지 못했습니다.</p>
+    {% endif %}
   </section>
 
   <section class="band">
@@ -343,20 +330,30 @@
         <span class="big-cap">모호한 세션 · {{ r60.ambiguous_sessions }} / {{ r60.sessions_armed }}</span>
       </div>
     </div>
-    {% if reduction is not none %}
+    {% if case %}
     <div class="verdict">
-      <span class="field-label" style="margin:0">60분봉으로 줄어든 모호율</span>
-      <span class="verdict-num">{{ '%.1f'|format(reduction*100) }}%</span>
+      <span class="field-label" style="margin:0">동전던지기에서 구제된 세션</span>
+      <span class="verdict-num">{{ case.sessions_rescued }}</span>
       <span class="hydro">
-        {% if reduction > 0.30 %}
-          유료 인트라데이 데이터 구매의 수치적 근거가 됩니다.
-        {% elif reduction > 0.10 %}
-          효과는 있으나 결정적이지 않습니다. 실제 종목으로 재확인하세요.
-        {% else %}
-          이 정도면 60분봉을 살 이유가 약합니다.
-        {% endif %}
+        전체 {{ r1d.sessions_armed }}세션 중 {{ '%.1f'|format(case.share_rescued*100) }}%
+        · 모호율 {{ '%.1f'|format(case.gap_pp) }}%p 감소
+        {% if case.relative is not none %}(상대 {{ '%.1f'|format(case.relative*100) }}%){% endif %}
       </span>
     </div>
+    <p class="band-note" style="margin-top:12px; display:block">
+      {% if case.share_rescued > 0.08 %}
+        <strong>유료 인트라데이 데이터 구매의 근거가 됩니다.</strong> 일봉만 쓰면 이만큼의 세션에서
+        결과가 관측 불가능한 순서에 좌우되고, 불리한 순서 가정 때문에 없는 손실이 발명됩니다.
+      {% elif case.share_rescued > 0.03 %}
+        효과는 있으나 결정적이지 않습니다. 실제로 쓸 손절 거리에서 다시 확인하세요.
+      {% else %}
+        구제되는 세션이 적습니다. 이 파라미터에서는 60분봉을 살 이유가 약합니다.
+      {% endif %}
+      <br><br>
+      <em>상대 감소율(%)에 기대지 마세요.</em> 손절을 넓히면 일봉 모호율 자체가 0에 가까워지면서
+      상대 감소율은 100%까지 올라가지만, 그때 구제되는 세션은 거의 없습니다 — 즉 구매가
+      가장 불필요한 지점에서 가장 좋아 보입니다. 판단은 위의 <strong>세션 수</strong>로 하세요.
+    </p>
     {% endif %}
 
     <table class="tbl" style="margin-top:22px">

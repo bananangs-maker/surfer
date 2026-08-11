@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SURFER · 백테스트{% if symbol %} · {{ symbol }}{% endif %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Monochrome, after the reference chart study. Direction and emphasis are
+       carried by fill and stroke weight, never by hue - a greyscale sheet cannot
+       imply that one outcome is the good one. */
+    --paper:#EDEDEB;
+    --panel:#FFFFFF;
+    --ink:#111111;
+    --zone-1:#D9D9D7;
+    --zone-2:#C4C4C2;
+    --zone-3:#A8A8A6;
+    --muted:#8A8A88;
+    --hair:rgba(17,17,17,.22);
+    --hair-soft:rgba(17,17,17,.10);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Barlow',system-ui,sans-serif; font-size:16px; line-height:1.55;
+
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:32px 20px 96px}
+  .cartouche{border:1px solid var(--ink); background:var(--panel); padding:22px 24px; margin-bottom:28px}
+  .cartouche-top{display:flex; flex-wrap:wrap; gap:6px 18px; align-items:baseline;
+    border-bottom:1px solid var(--hair); padding-bottom:14px; margin-bottom:14px}
+  .mark{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:38px;
+    letter-spacing:.22em; text-transform:uppercase; line-height:1}
+  .mark-sub{font-family:'Barlow Condensed',sans-serif; font-weight:500; font-size:15px;
+    letter-spacing:.3em; text-transform:uppercase; color:var(--muted)}
+  .field-label{font-family:'Barlow Condensed',sans-serif; font-size:12px; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); display:block; margin-bottom:2px}
+  .hydro{font-style:italic; color:var(--muted)}
+  pre.win{font-family:'IBM Plex Mono',monospace; font-size:12.5px; margin:0;
+    background:var(--zone-1); padding:12px; border:1px solid var(--hair);
+    white-space:pre-wrap; word-break:break-word}
+  .caution{border:1.5px solid var(--ink); border-left-width:6px; padding:16px 20px;
+    margin-bottom:28px; background:rgba(179,23,119,.045)}
+  .caution-tag{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px;
+    letter-spacing:.24em; text-transform:uppercase; color:var(--ink); display:block; margin-bottom:6px}
+  .band{margin:0 0 32px}
+  .band-head{display:flex; align-items:baseline; gap:14px; border-bottom:1.5px solid var(--ink);
+    padding-bottom:7px; margin-bottom:18px}
+  .band-title{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:20px;
+    letter-spacing:.16em; text-transform:uppercase; margin:0}
+  .band-note{font-size:14px; color:var(--muted); font-style:italic}
+  .controls{border:1px solid var(--ink); background:var(--panel); padding:18px 20px;
+    margin-bottom:28px; display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+    gap:14px 18px; align-items:end}
+  select{width:100%; font-family:'IBM Plex Mono',monospace; font-size:15px; padding:8px 10px;
+    border:1px solid var(--ink); background:#fff; color:var(--ink); border-radius:0}
+  button{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:15px;
+    letter-spacing:.18em; text-transform:uppercase; padding:10px 22px;
+    border:1.5px solid var(--ink); background:var(--ink); color:var(--paper);
+    cursor:pointer; border-radius:0}
+  button:hover{background:var(--panel); color:var(--ink)}
+  a{color:var(--ink)}
+  a:focus-visible,button:focus-visible,select:focus-visible{outline:2.5px solid var(--ink); outline-offset:2px}
+  .verdict-grid{display:grid; grid-template-columns:1fr 1fr; border:1.5px solid var(--ink)}
+  .vcol{padding:20px}
+  .vcol + .vcol{border-left:1.5px solid var(--ink)}
+  .v-surfer{background:var(--zone-1)} .v-bh{background:var(--zone-2)}
+  .col-tag{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px;
+    letter-spacing:.22em; text-transform:uppercase; display:block; margin-bottom:12px}
+  .big{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:clamp(28px,6vw,42px); line-height:1}
+  .big-cap{font-family:'Barlow Condensed',sans-serif; font-size:13px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); margin-top:6px; display:block}
+  .gate{border:1.5px solid var(--ink); border-top:none; padding:16px 20px}
+  .gate-row{display:flex; flex-wrap:wrap; gap:6px 16px; align-items:baseline; padding:5px 0}
+  .pass,.fail{font-family:'Barlow Condensed',sans-serif; font-weight:600;
+    letter-spacing:.16em; padding:2px 10px; border:1.5px solid var(--ink)}
+  .pass{background:var(--panel); color:var(--ink)}
+  .fail{background:var(--ink); color:var(--panel)}
+  .final{font-family:'Barlow Condensed',sans-serif; font-size:22px;
+    text-transform:uppercase; margin-top:14px; display:inline-block; padding:4px 22px}
+  .tbl{width:100%; border-collapse:collapse; font-size:15px}
+  .tbl th,.tbl td{padding:8px 10px; border-bottom:1px solid var(--hair-soft); text-align:right}
+  .tbl th:first-child,.tbl td:first-child{text-align:left}
+  .tbl thead th{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:12px;
+    letter-spacing:.18em; text-transform:uppercase; color:var(--muted); border-bottom:1.5px solid var(--ink)}
+  .tbl td.num{font-family:'IBM Plex Mono',monospace}
+  .tbl tr.accent td{background:var(--zone-1); font-weight:500}
+  .foot{margin-top:40px; padding-top:16px; border-top:1px solid var(--hair); font-size:14px; color:var(--muted)}
+  .err pre{overflow-x:auto; font-family:'IBM Plex Mono',monospace; font-size:12px;
+    background:var(--zone-1); padding:12px; margin:12px 0 0}
+  @media (max-width:680px){
+    .verdict-grid{grid-template-columns:1fr}
+    .vcol + .vcol{border-left:none; border-top:1.5px solid var(--ink)}
+  }
+
+  /* Korean does not take Latin tracking. The reference sheet's wide letter-
+     spacing belongs to uppercase Latin only - applied to Hangul it stretches
+     syllable blocks apart and hurts legibility. Wordmark and chart labels keep
+     it; Korean UI text does not. */
+  .field-label, .caution-tag, .col-tag, .band-title, .final,
+  .pass, .fail, button, .tbl thead th{ letter-spacing:.02em }
+  .mark{ letter-spacing:.22em }
+  .mark-sub{ letter-spacing:.26em }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="cartouche">
+    <div class="cartouche-top">
+      <span class="mark">Surfer</span>
+      <span class="mark-sub">Backtest · DES-002</span>
+    </div>
+    <div>
+      <span class="field-label">구간 상태</span>
+      <pre class="win">{{ windows }}</pre>
+    </div>
+    <p style="margin:14px 0 0"><a href="/">← 모호율 진단으로</a></p>
+  </header>
+
+  <form class="controls" method="get" action="/backtest">
+    <label>
+      <span class="field-label">종목</span>
+      <select name="symbol">
+        {% for s in symbols %}
+        <option value="{{ s }}" {% if s==symbol %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span class="field-label">후보</span>
+      <select name="candidate">
+        {% for k,(label,_) in candidates.items() %}
+        <option value="{{ k }}" {% if k==candidate %}selected{% endif %}>{{ k }} · {{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">백테스트 실행</button>
+  </form>
+
+  {% if blocked %}
+  <div class="caution">
+    <span class="caution-tag">검증 구간 잠김 — DES-002 §3.3</span>
+    <p>{{ blocked }}</p>
+    <p class="hydro">이 잠금은 문서상의 약속이 아니라 코드입니다. 한 번 들여다보면
+    표본 외 증거가 사라지고, 8년 데이터를 구매한 의미가 없어집니다. 해제하려면
+    후보 선택을 확정하고 <code>unlock_validation()</code>으로 기록을 남긴 뒤 커밋해야
+    합니다 — 되돌릴 수 없습니다.</p>
+    <p class="hydro">SYNTH3X는 시장 정보가 없으므로 잠금과 무관하게 실행됩니다.
+    엔진 동작 확인에만 쓰세요.</p>
+  </div>
+  {% elif error %}
+  <div class="caution err">
+    <span class="caution-tag">실행 실패</span>
+    <p><strong>{{ error }}</strong></p>
+    <pre>{{ trace }}</pre>
+  </div>
+  {% elif res %}
+
+  {% if window_note %}
+  <div class="caution" style="border-color:var(--ink); background:var(--zone-1)">
+    <span class="caution-tag" style="color:var(--ink)">구간 제한 적용됨</span>
+    <p>{{ window_note }}</p>
+  </div>
+  {% endif %}
+
+  {% if res.quarantined %}
+  <div class="caution">
+    <span class="caution-tag">격리 데이터 — 증거가 아님</span>
+    <p>{{ res.quarantine_reason }}</p>
+  </div>
+  {% endif %}
+
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">판정</h2>
+      <span class="band-note">§2.2 칼마 1.5배 · §2.3 낙폭 절반 — 둘 다 통과해야 함</span>
+    </div>
+    <div class="verdict-grid">
+      <div class="vcol v-surfer">
+        <span class="col-tag">서퍼 · 후보 {{ candidate }}</span>
+        <span class="big">{{ '%.2f'|format(v.surfer.calmar) }}</span>
+        <span class="big-cap">칼마 · CAGR {{ '%.1f'|format(v.surfer.cagr*100) }}% · 낙폭 {{ '%.1f'|format(v.surfer.max_drawdown*100) }}%</span>
+      </div>
+      <div class="vcol v-bh">
+        <span class="col-tag">바이앤홀드 (기준선)</span>
+        <span class="big">{{ '%.2f'|format(v.buy_and_hold.calmar) }}</span>
+        <span class="big-cap">칼마 · CAGR {{ '%.1f'|format(v.buy_and_hold.cagr*100) }}% · 낙폭 {{ '%.1f'|format(v.buy_and_hold.max_drawdown*100) }}%</span>
+      </div>
+    </div>
+    <div class="gate">
+      <div class="gate-row">
+        <span class="field-label" style="margin:0">§2.2 칼마</span>
+        <span>필요 {{ '%.2f'|format(v.calmar_required) }} 이상 (그리고 0 초과)</span>
+        <span class="{{ 'pass' if v.calmar_pass else 'fail' }}">{{ 'PASS' if v.calmar_pass else 'FAIL' }}</span>
+      </div>
+      <div class="gate-row">
+        <span class="field-label" style="margin:0">§2.3 낙폭</span>
+        <span>{{ '%.2f'|format(v.mdd_allowed*100) }}% 보다 얕아야 함</span>
+        <span class="{{ 'pass' if v.mdd_pass else 'fail' }}">{{ 'PASS' if v.mdd_pass else 'FAIL' }}</span>
+      </div>
+      {% if not v.baseline_calmar_positive %}
+      <p class="hydro" style="margin:8px 0 0">기준선 칼마가 0 이하인 구간입니다.
+      배수 조건은 음수에서 방향이 뒤집히므로 적용하지 않고, 서퍼 칼마가 0을 넘는지만
+      봅니다 (§2.2 보정).</p>
+      {% endif %}
+      <span class="final {{ 'pass' if v.pass else 'fail' }}">
+        {{ 'PASS' if v.pass else 'FAIL' }}
+      </span>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">거래 통계</h2>
+      <span class="band-note">비용 반영 · 갭 체결 별도 집계</span>
+    </div>
+    <table class="tbl">
+      <tbody>
+        <tr><td>청산 거래</td><td class="num">{{ trade_stats.n }}</td></tr>
+        <tr><td>평균 보유 세션</td><td class="num">{{ '%.1f'|format(trade_stats.avg_sessions_held) }}</td></tr>
+        <tr><td>노출 (포지션 보유 세션 비율)</td><td class="num">{{ '%.1f'|format(res.exposure*100) }}%</td></tr>
+        <tr><td>구조 청산 / 고정 손절</td><td class="num">{{ trade_stats.structural_exits }} / {{ trade_stats.stopped }}</td></tr>
+        <tr><td>갭 진입 / 갭 청산</td><td class="num">{{ trade_stats.gap_entries }} / {{ trade_stats.gap_exits }}</td></tr>
+        <tr><td>수중 최장 기간</td><td class="num">{{ v.surfer.longest_underwater_sessions }} 세션</td></tr>
+        <tr class="accent"><td>모호 거래 비율</td><td class="num">{{ '%.1f'|format(amb_share*100) }}%</td></tr>
+      </tbody>
+    </table>
+    <p class="band-note" style="margin-top:14px; display:block">
+      모호 거래 비율이 40%를 넘으면 DES-002 §6에 따라 결과를 신뢰할 수 없습니다 —
+      손익이 봉 데이터로 관측 불가능한 인트라바 순서에 의존한다는 뜻이므로,
+      PASS든 FAIL든 판정 자체가 무효입니다.
+    </p>
+  </section>
+
+  {% endif %}
+
+  <p class="foot">
+    레벨 산출기가 플레이스홀더이거나 후보 상태인 동안 나오는 수치는 그 규칙을
+    측정한 것입니다. 이 화면은 주문을 넣지 않고 증권사 인증정보를 갖고 있지 않습니다.
+  </p>
+</div>
+</body>
+</html>

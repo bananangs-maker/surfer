@@ -166,3 +166,147 @@ def test_gate_does_not_interfere_with_open_positions(ds):
                        acknowledge_quarantine=True)
     assert all(t.closed for t in res.trades)
     assert any(t.sessions_held >= 1 for t in res.closed_trades)
+
+
+# --- time-indexed equity: the axis DES-002 judges on ----------------------
+
+def test_equity_curve_has_one_point_per_session(ds):
+    from levels import StructuralExit
+
+    res = run_backtest(ds, PlaceholderBreakout(), exit_rule=StructuralExit(),
+                       acknowledge_quarantine=True)
+    assert len(res.equity) == len(ds.sessions)
+    dates = [d for d, _ in res.equity]
+    assert dates == sorted(dates)
+
+
+def test_equity_moves_while_a_position_is_open(ds):
+    """The bug this pins: compounding only at exit produced a TRADE-indexed
+    curve, and a trade-indexed drawdown cannot be compared with a buy-and-hold
+    drawdown measured over time. Equity must move on held sessions too.
+    """
+    from levels import StructuralExit
+
+    res = run_backtest(ds, PlaceholderBreakout(), exit_rule=StructuralExit(),
+                       acknowledge_quarantine=True)
+    exit_dates = {t.exit_date for t in res.closed_trades}
+    moved_without_an_exit = 0
+    prev = None
+    for d, v in res.equity:
+        if prev is not None and d not in exit_dates and abs(v - prev) > 1e-9:
+            moved_without_an_exit += 1
+        prev = v
+    assert moved_without_an_exit > 0, "equity is flat except at exits"
+
+
+def test_buy_and_hold_baseline_spans_the_same_sessions(ds):
+    from backtest import buy_and_hold
+
+    bh = buy_and_hold(ds)
+    assert len(bh) == len(ds.sessions)
+    assert [d for d, _ in bh] == ds.sessions
+
+
+def test_curve_metrics_arithmetic():
+    """Hand-checked: 10 -> 20 -> 10 -> 15 over 252 sessions."""
+    import datetime as dt
+
+        # value path with a known 50% drawdown and a known ending multiple
+    vals = [10.0] * 63 + [20.0] * 63 + [10.0] * 63 + [15.0] * 63
+    curve = [(dt.date(2020, 1, 1) + dt.timedelta(days=i), v)
+             for i, v in enumerate(vals)]
+    from backtest import curve_metrics
+
+    m = curve_metrics(curve)
+    assert m["n_sessions"] == 252
+    assert m["total_return"] == pytest.approx(0.5)
+    assert m["cagr"] == pytest.approx(0.5, abs=1e-6)      # exactly one year
+    assert m["max_drawdown"] == pytest.approx(-0.5)       # 20 -> 10
+    assert m["calmar"] == pytest.approx(1.0, abs=1e-6)
+    assert m["longest_underwater_sessions"] == 126        # the 10s then the 15s
+
+
+def test_verdict_thresholds_match_the_preregistration(ds):
+    """SURFER-DES-002 §2.2 Calmar 1.5x, §2.3 MDD 50% of B&H. Both independent."""
+    import inspect
+
+    from backtest import verdict
+
+    sig = inspect.signature(verdict)
+    assert sig.parameters["calmar_multiple_required"].default == 1.5
+    assert sig.parameters["mdd_share_allowed"].default == 0.50
+
+
+def test_verdict_requires_both_conditions(ds):
+    import datetime as dt
+
+    from backtest import verdict
+
+    def curve(vals):
+        return [(dt.date(2020, 1, 1) + dt.timedelta(days=i), v)
+                for i, v in enumerate(vals)]
+
+    bh = curve([10.0] * 126 + [5.0] * 63 + [12.0] * 63)      # -50% MDD
+    # Same shape but shallower: passes MDD, and Calmar scales with it.
+    good = curve([10.0] * 126 + [8.0] * 63 + [14.0] * 63)    # -20% MDD
+    v = verdict(good, bh)
+    assert v["mdd_pass"] is True
+    assert v["pass"] == (v["calmar_pass"] and v["mdd_pass"])
+
+    # Deeper than the baseline allows -> must fail regardless of return.
+    bad = curve([10.0] * 126 + [3.0] * 63 + [40.0] * 63)
+    v2 = verdict(bad, bh)
+    assert v2["mdd_pass"] is False
+    assert v2["pass"] is False
+
+
+def test_placeholder_does_not_pass_the_verdict(ds):
+    """Sanity: an arbitrary shim on synthetic data must not clear the bar. If it
+    ever does, the verdict is not measuring what it claims to."""
+    from backtest import buy_and_hold, verdict
+    from levels import StructuralExit
+
+    res = run_backtest(ds, PlaceholderBreakout(), exit_rule=StructuralExit(),
+                       acknowledge_quarantine=True)
+    assert verdict(res.equity, buy_and_hold(ds))["pass"] is False
+
+
+def test_negative_baseline_calmar_does_not_let_a_loser_pass():
+    """A multiplicative threshold inverts on a negative baseline.
+
+    With B&H Calmar at -0.83, "1.5x" asks for >= -1.25, which a losing system
+    clears. DES-002 §3.3 puts 2022 inside the measured windows, so the case is
+    real. The repaired rule requires SURFER's own Calmar to be positive.
+    """
+    import datetime as dt
+
+    from backtest import verdict
+
+    def curve(vals):
+        return [(dt.date(2020, 1, 1) + dt.timedelta(days=i), v)
+                for i, v in enumerate(vals)]
+
+    bh_bear = curve([10.0] * 126 + [4.0] * 63 + [5.0] * 63)
+    assert verdict(curve([10.0] * 126), bh_bear)["buy_and_hold"]["calmar"] <= 0
+
+    loser = curve([10.0] * 126 + [7.0] * 63 + [8.0] * 63)
+    v = verdict(loser, bh_bear)
+    assert v["calmar_pass"] is False
+    assert v["pass"] is False
+
+    winner = curve([10.0] * 126 + [9.0] * 63 + [14.0] * 63)
+    assert verdict(winner, bh_bear)["calmar_pass"] is True
+
+
+def test_positive_calmar_is_necessary_even_against_a_weak_baseline():
+    import datetime as dt
+
+    from backtest import verdict
+
+    def curve(vals):
+        return [(dt.date(2020, 1, 1) + dt.timedelta(days=i), v)
+                for i, v in enumerate(vals)]
+
+    flat_bh = curve([10.0] * 252)
+    declining = curve([10.0] * 126 + [9.5] * 126)
+    assert verdict(declining, flat_bh)["calmar_pass"] is False

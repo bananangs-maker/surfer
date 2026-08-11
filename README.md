@@ -87,15 +87,36 @@ parameter sets.
 schema.py         the only contract the rest of the code knows
 integrity.py      sessions, stub bars, grid gaps, split-artefact flags
 loaders.py        yfinance (quarantined) / FirstRate CSV / synthetic fixture
-levels.py         PURE function of prior sessions -> LevelSet   <- THE OPEN PLUG
-fills.py          LevelSet + following bars -> fills, with ambiguity flags
+levels.py         entry candidates A-D, structural exit, ATR helpers
+fills.py          LevelSet + bars -> fills; carries positions across sessions
 aggregate.py      60m -> daily, for the resolution comparison
-diagnostics.py    the comparison; performance deliberately obstructed
-app.py            web viewer
-report_template.html
+diagnostics.py    resolution comparison; purchase case
+backtest.py       session mark-to-market, costs, buy-and-hold, DES-002 verdict
+chart.py          annotated candlestick SVG, monochrome
+windows.py        mechanical lock on the validation window
+app.py            web viewer: / diagnostic, /backtest
+report_template.html, backtest.html
 run_diagnostic.py CLI
-test_*.py         28 tests
+test_*.py         73 tests
+SURFER-DES-001.md pre-registration, use 1 (ON HOLD)
+SURFER-DES-002.md pre-registration, use 2 (ACTIVE)
 ```
+
+## The validation window is locked in code
+
+`SURFER-DES-002` §3.3 splits the data: candidates are chosen on sessions up to
+2019-12-31, and everything after is out-of-sample. `windows.py` enforces it —
+`validation_slice()` raises until `unlock_validation()` writes
+`VALIDATION_UNLOCKED.json`, which is committed rather than ignored, so opening
+the window is a timestamped record naming the candidate chosen.
+
+The failure mode this guards is not dishonesty, it is one idle afternoon.
+Looking once contaminates the window, and after that the purchased history
+answers a weaker question than it was bought for.
+
+Note that the current yfinance source (730 days) lies **entirely inside** the
+validation window, so `/backtest` refuses real symbols until selection-window
+data exists. The synthetic fixture stays available because it leaks nothing.
 
 ## Hard-coded rules (test_fills.py pins all three)
 
@@ -159,3 +180,25 @@ the pre-registration document.
 A second, separate confound: excluding stubs shortens the bar sequence, so a
 fixed `lookback_bars` window spans a different number of calendar sessions
 between the two settings.
+
+
+## Visual language
+
+Monochrome, after a chart-study reference: hairlines, shaded zones, boxed price
+labels on a right rail, numbered leader callouts. Direction is carried by fill
+(hollow up, solid down) and emphasis by stroke weight — never by hue, because a
+greyscale sheet cannot imply that one outcome is the good one. PASS is an
+outlined chip, FAIL a filled one.
+
+`chart.py` draws real bars with a real `LevelSet` on them, generated from the
+same data the diagnostic counts, so the illustration cannot drift from the
+numbers printed beneath it. The abstract diagram it replaced could.
+
+Two constraints are pinned by tests. The SVG contains no Hangul — Barlow has no
+Hangul glyphs, so Korean inside the drawing falls back unpredictably; it lives in
+the HTML legend instead, keyed to numbered markers. And the right-rail price
+boxes are spaced apart, because trigger and limit often sit close enough that
+their boxes and labels collided and both numbers became unreadable.
+
+Wide Latin tracking applies to the wordmark and chart labels only. Applied to
+Hangul it pulls syllable blocks apart, so Korean UI text uses normal spacing.
