@@ -18,12 +18,27 @@ MATILDA's pre-registration — SURFER needs its own.
 ## Run
 
 ```bash
-python run_diagnostic.py --source synthetic --sessions 400
-python -m pytest -q tests/
+python -m pytest -q tests/                          # 22 passed
+python run_diagnostic.py --source synthetic --sessions 400   # terminal
+python app.py                                       # browser, localhost:8000
 ```
 
-`--source yfinance --symbol TQQQ` works once `pip install yfinance` is done and
-the machine has network access to Yahoo.
+## Deploy the viewer (Render)
+
+`render.yaml` is a Blueprint for a **free** web service. Render's servers are in
+the US, so the yfinance path works there even when it does not locally.
+
+New → Blueprint → pick this repo → Apply. No environment variables are needed;
+the service holds no credentials.
+
+Two things about the free plan: it sleeps after ~15 minutes idle, so the first
+load after a gap takes about a minute, and the first fetch of 730 days of
+60-minute bars is slow (hence `--timeout 180` in the start command). Results are
+cached in memory for 30 minutes.
+
+**The viewer reads and renders. It places no orders and stores no credentials.**
+If execution is ever automated, it belongs in a separate deployment with
+separate secrets — do not grow this service into that one.
 
 ## What it does and does not produce
 
@@ -48,6 +63,13 @@ the purchase has a written numeric justification. On the synthetic fixture the
 reduction is ~42% (33.3% → 19.2%) — that number demonstrates the mechanism
 works and says nothing about TQQQ, which is the point of running it on real
 bars.
+
+**Caveat, and it is not small.** The ambiguity rate depends on level *spacing*,
+not only on bar width. Widening the stop distance moves the levels apart and the
+rate falls on its own: at `stop_atr_mult=2.0, trigger=0.30` the fixture reports
+2.1% instead of 19.2%. So the rate is a joint property of the data and the level
+rule, and it cannot be quoted without the parameters attached. Compare
+resolutions at *fixed* parameters; never compare across parameter sets.
 
 ## Architecture
 

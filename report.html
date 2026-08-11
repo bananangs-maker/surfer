@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SURFER · 소딩 리포트{% if symbol %} · {{ symbol }}{% endif %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FBFAF4;
+    --shallow:#E4EFF3;
+    --deep:#CBDFE8;
+    --shoal:#EFE3C6;
+    --ink:#17303E;
+    --sounding:#5E7C8B;
+    --caution:#B31777;
+    --rule:rgba(23,48,62,.18);
+    --rule-soft:rgba(23,48,62,.09);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Barlow',system-ui,sans-serif; font-size:16px; line-height:1.55;
+    background-image:
+      linear-gradient(var(--rule-soft) 1px,transparent 1px),
+      linear-gradient(90deg,var(--rule-soft) 1px,transparent 1px);
+    background-size:44px 44px;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:32px 20px 96px}
+
+  /* ---- title block (chart cartouche) ---- */
+  .cartouche{
+    border:1.5px solid var(--ink); background:var(--paper);
+    padding:22px 24px; margin-bottom:28px;
+  }
+  .cartouche-top{
+    display:flex; flex-wrap:wrap; gap:6px 18px; align-items:baseline;
+    border-bottom:1px solid var(--rule); padding-bottom:14px; margin-bottom:14px;
+  }
+  .mark{
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:38px;
+    letter-spacing:.22em; text-transform:uppercase; line-height:1;
+  }
+  .mark-sub{
+    font-family:'Barlow Condensed',sans-serif; font-weight:500; font-size:15px;
+    letter-spacing:.3em; text-transform:uppercase; color:var(--sounding);
+  }
+  .cartouche-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px 26px;
+  }
+  .field-label{
+    font-family:'Barlow Condensed',sans-serif; font-size:12px; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--sounding); display:block; margin-bottom:2px;
+  }
+  .field-value{font-family:'IBM Plex Mono',monospace; font-size:14px; word-break:break-word}
+  .hydro{font-style:italic; color:var(--sounding)}
+
+  /* ---- caution ---- */
+  .caution{
+    border:1.5px solid var(--caution); border-left-width:7px;
+    padding:16px 20px; margin-bottom:28px; background:rgba(179,23,119,.045);
+  }
+  .caution-tag{
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px;
+    letter-spacing:.24em; text-transform:uppercase; color:var(--caution);
+    display:block; margin-bottom:6px;
+  }
+  .caution p{margin:0 0 8px}
+  .caution p:last-child{margin-bottom:0}
+
+  /* ---- sections ---- */
+  .band{margin:0 0 32px}
+  .band-head{
+    display:flex; align-items:baseline; gap:14px;
+    border-bottom:1.5px solid var(--ink); padding-bottom:7px; margin-bottom:18px;
+  }
+  .band-title{
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:20px;
+    letter-spacing:.16em; text-transform:uppercase; margin:0;
+  }
+  .band-note{font-size:14px; color:var(--sounding); font-style:italic}
+
+  /* ---- signature: the sounding diagram ---- */
+  .plate{border:1px solid var(--rule); background:#fff; padding:8px}
+  .plate svg{display:block; width:100%; height:auto}
+  .plate-cap{
+    font-size:14px; color:var(--sounding); padding:10px 6px 4px; margin:0;
+  }
+
+  /* ---- readout ---- */
+  .readout{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1.5px solid var(--ink)}
+  .col{padding:20px}
+  .col + .col{border-left:1.5px solid var(--ink)}
+  .col-daily{background:var(--deep)}
+  .col-60{background:var(--shallow)}
+  .col-tag{
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px;
+    letter-spacing:.22em; text-transform:uppercase; display:block; margin-bottom:12px;
+  }
+  .big{
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:clamp(34px,7vw,52px);
+    line-height:1; letter-spacing:-.02em;
+  }
+  .big-cap{
+    font-family:'Barlow Condensed',sans-serif; font-size:13px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--sounding); margin-top:6px; display:block;
+  }
+  .verdict{
+    border:1.5px solid var(--ink); border-top:none; padding:18px 20px;
+    display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline;
+  }
+  .verdict-num{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:26px}
+
+  /* ---- tables ---- */
+  .tbl{width:100%; border-collapse:collapse; font-size:15px}
+  .tbl th,.tbl td{padding:8px 10px; border-bottom:1px solid var(--rule-soft); text-align:right}
+  .tbl th:first-child,.tbl td:first-child{text-align:left}
+  .tbl thead th{
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:12px;
+    letter-spacing:.18em; text-transform:uppercase; color:var(--sounding);
+    border-bottom:1.5px solid var(--ink);
+  }
+  .tbl td.num{font-family:'IBM Plex Mono',monospace}
+  .tbl tr.accent td{background:var(--shoal); font-weight:500}
+
+  /* ---- controls ---- */
+  .controls{
+    border:1.5px solid var(--ink); background:var(--paper);
+    padding:18px 20px; margin-bottom:28px;
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px 18px;
+    align-items:end;
+  }
+  .controls label{display:block}
+  select,input[type=number]{
+    width:100%; font-family:'IBM Plex Mono',monospace; font-size:15px;
+    padding:8px 10px; border:1px solid var(--ink); background:#fff; color:var(--ink);
+    border-radius:0;
+  }
+  button{
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:15px;
+    letter-spacing:.18em; text-transform:uppercase;
+    padding:10px 22px; border:1.5px solid var(--ink); background:var(--ink);
+    color:var(--paper); cursor:pointer; border-radius:0;
+  }
+  button:hover{background:var(--caution); border-color:var(--caution)}
+  a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{
+    outline:2.5px solid var(--caution); outline-offset:2px;
+  }
+
+  .flags{list-style:none; padding:0; margin:12px 0 0; font-size:14px}
+  .flags li{
+    font-family:'IBM Plex Mono',monospace; padding:5px 0;
+    border-bottom:1px dotted var(--rule);
+  }
+  .foot{
+    margin-top:40px; padding-top:16px; border-top:1px solid var(--rule);
+    font-size:14px; color:var(--sounding);
+  }
+  .err{
+    border:1.5px solid var(--caution); padding:18px 20px; background:#fff;
+  }
+  .err pre{
+    overflow-x:auto; font-family:'IBM Plex Mono',monospace; font-size:12px;
+    background:var(--shallow); padding:12px; margin:12px 0 0;
+  }
+  @media (max-width:680px){
+    .readout{grid-template-columns:1fr}
+    .col + .col{border-left:none; border-top:1.5px solid var(--ink)}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="cartouche">
+    <div class="cartouche-top">
+      <span class="mark">Surfer</span>
+      <span class="mark-sub">Sounding Report · Diag-001</span>
+    </div>
+    <div class="cartouche-grid">
+      <div>
+        <span class="field-label">측정 대상</span>
+        <span class="field-value">{{ symbol }}{% if ds %} · {{ symbols[symbol] }}{% endif %}</span>
+      </div>
+      {% if ds %}
+      <div>
+        <span class="field-label">표본 구간</span>
+        <span class="field-value">{{ ds.sessions[0] }} → {{ ds.sessions[-1] }}</span>
+      </div>
+      <div>
+        <span class="field-label">해상도 · 출처</span>
+        <span class="field-value">{{ ds.interval_minutes }}분 · {{ ds.source }}</span>
+      </div>
+      <div>
+        <span class="field-label">조정 상태</span>
+        <span class="field-value">{{ ds.adjustment.value }}</span>
+      </div>
+      {% endif %}
+      <div>
+        <span class="field-label">이 리포트가 하는 일</span>
+        <span class="field-value hydro">체결 순서를 알 수 없는 세션의 비율 측정</span>
+      </div>
+    </div>
+  </header>
+
+  <form class="controls" method="get" action="/">
+    <label>
+      <span class="field-label">종목</span>
+      <select name="symbol">
+        {% for s,desc in symbols.items() %}
+        <option value="{{ s }}" {% if s==symbol %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span class="field-label">진입 트리거 (ATR배수)</span>
+      <input type="number" name="trigger" step="0.05" min="0" max="3" value="{{ params.trigger }}">
+    </label>
+    <label>
+      <span class="field-label">지정가 폭 (ATR배수)</span>
+      <input type="number" name="limit" step="0.05" min="0.05" max="3" value="{{ params.limit }}">
+    </label>
+    <label>
+      <span class="field-label">손절 거리 (ATR배수)</span>
+      <input type="number" name="stop" step="0.1" min="0.1" max="5" value="{{ params.stop }}">
+    </label>
+    <button type="submit">측정 실행</button>
+  </form>
+
+  {% if error %}
+  <div class="err">
+    <span class="caution-tag">실행 실패</span>
+    <p><strong>{{ error }}</strong></p>
+    <p class="hydro">야후에서 60분봉을 못 받은 경우가 가장 흔합니다. 종목을 SYNTH3X로 바꾸면 데이터 없이 엔진 동작은 확인됩니다.</p>
+    <pre>{{ trace }}</pre>
+  </div>
+  {% else %}
+
+  {% if ds.quarantined %}
+  <div class="caution">
+    <span class="caution-tag">격리 — 성과 수치 산출 금지</span>
+    <p>{{ ds.quarantine_reason }}</p>
+    <p>이 표본으로는 <strong>수익률을 계산하지 않습니다.</strong> 2018년 4분기, 2020년 1분기, 2022년이 빠져 있어서 하락 추세에서 이 시스템이 버티는지에 답할 수 없습니다. 아래 모호율은 봉의 폭과 레벨 간격이 만드는 <em>구조적</em> 성질이라 상승 구간 표본으로도 정직하게 측정됩니다.</p>
+  </div>
+  {% endif %}
+
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">모호율이 무엇을 뜻하는가</h2>
+      <span class="band-note">봉 하나 안에 두 레벨이 들어가면 순서를 알 수 없습니다</span>
+    </div>
+    <div class="plate">
+      <svg viewBox="0 0 720 300" role="img"
+           aria-label="일봉 하나에는 진입선과 손절선이 같은 봉 안에 들어가 순서를 알 수 없고, 60분봉 일곱 개로 쪼개면 두 선이 서로 다른 봉에 들어가 순서가 관측된다는 비교 도해">
+        <defs>
+          <pattern id="unknown" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="7" stroke="#B31777" stroke-width="1.6" opacity=".33"/>
+          </pattern>
+        </defs>
+
+        <!-- shared level lines -->
+        <line x1="16" y1="96"  x2="704" y2="96"  stroke="#17303E" stroke-width="1.2" stroke-dasharray="7 5"/>
+        <line x1="16" y1="214" x2="704" y2="214" stroke="#B31777" stroke-width="1.2" stroke-dasharray="7 5"/>
+        <text x="16" y="88"  font-family="'Barlow Condensed',sans-serif" font-size="13" letter-spacing="1.8" fill="#17303E">진입 트리거</text>
+        <text x="16" y="232" font-family="'Barlow Condensed',sans-serif" font-size="13" letter-spacing="1.8" fill="#B31777">손절</text>
+
+        <!-- LEFT: one daily bar -->
+        <text x="60" y="34" font-family="'Barlow Condensed',sans-serif" font-size="15" font-weight="600" letter-spacing="2.6" fill="#17303E">일봉 1개</text>
+        <rect x="120" y="56" width="76" height="196" fill="url(#unknown)" stroke="#17303E" stroke-width="1.6"/>
+        <line x1="158" y1="46" x2="158" y2="56" stroke="#17303E" stroke-width="1.6"/>
+        <line x1="158" y1="252" x2="158" y2="264" stroke="#17303E" stroke-width="1.6"/>
+        <circle cx="158" cy="96"  r="5.5" fill="#fff" stroke="#17303E" stroke-width="1.8"/>
+        <circle cx="158" cy="214" r="5.5" fill="#fff" stroke="#B31777" stroke-width="1.8"/>
+        <text x="240" y="146" font-family="'IBM Plex Mono',monospace" font-size="30" font-weight="600" fill="#B31777">?</text>
+        <text x="240" y="176" font-family="'Barlow',sans-serif" font-size="14" fill="#17303E">두 레벨이 같은 봉 안 —</text>
+        <text x="240" y="196" font-family="'Barlow',sans-serif" font-size="14" fill="#17303E">어느 쪽이 먼저 닿았는지</text>
+        <text x="240" y="216" font-family="'Barlow',sans-serif" font-size="14" fill="#17303E">데이터가 말해주지 않음</text>
+
+        <!-- divider -->
+        <line x1="404" y1="24" x2="404" y2="284" stroke="#17303E" stroke-width="1" opacity=".3"/>
+
+        <!-- RIGHT: seven 60m bars -->
+        <text x="430" y="34" font-family="'Barlow Condensed',sans-serif" font-size="15" font-weight="600" letter-spacing="2.6" fill="#17303E">60분봉 7개</text>
+        <!-- bar 1 -->
+        <rect x="432" y="132" width="24" height="42" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
+        <!-- bar 2: touches entry -->
+        <rect x="470" y="84" width="24" height="58" fill="#E4EFF3" stroke="#17303E" stroke-width="1.6"/>
+        <circle cx="482" cy="96" r="5" fill="#fff" stroke="#17303E" stroke-width="1.8"/>
+        <text x="470" y="74" font-family="'IBM Plex Mono',monospace" font-size="12" font-weight="600" fill="#17303E">1</text>
+        <!-- bars 3-4 -->
+        <rect x="508" y="100" width="24" height="52" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
+        <rect x="546" y="126" width="24" height="56" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
+        <!-- bar 5: touches stop -->
+        <rect x="584" y="164" width="24" height="62" fill="#EFE3C6" stroke="#B31777" stroke-width="1.6"/>
+        <circle cx="596" cy="214" r="5" fill="#fff" stroke="#B31777" stroke-width="1.8"/>
+        <text x="584" y="246" font-family="'IBM Plex Mono',monospace" font-size="12" font-weight="600" fill="#B31777">2</text>
+        <!-- bars 6-7 (7 = stub, half width) -->
+        <rect x="622" y="150" width="24" height="48" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
+        <rect x="660" y="140" width="12" height="54" fill="#E4EFF3" stroke="#17303E" stroke-width="1.3"/>
+        <text x="646" y="272" font-family="'Barlow',sans-serif" font-size="12" font-style="italic" fill="#5E7C8B">↑ 15:30 반쪽봉</text>
+        <text x="432" y="292" font-family="'Barlow',sans-serif" font-size="14" fill="#17303E">진입이 먼저, 손절이 나중 — 순서가 관측됨</text>
+      </svg>
+      <p class="plate-cap">
+        같은 하루입니다. 왼쪽은 하루를 봉 하나로 보고, 오른쪽은 일곱 개로 쪼개서 봅니다.
+        쪼개면 두 레벨이 서로 다른 봉에 들어가서 어느 쪽이 먼저였는지 보입니다.
+        <strong>모호율</strong>은 쪼개도 여전히 한 봉 안에 겹치는 세션의 비율입니다 — 낮을수록 좋습니다.
+      </p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">측정 결과</h2>
+      <span class="band-note">같은 규칙, 같은 판정기, 해상도만 다르게</span>
+    </div>
+    <div class="readout">
+      <div class="col col-daily">
+        <span class="col-tag">일봉 OHLC</span>
+        <span class="big">{{ '%.1f'|format(r1d.ambiguity_rate*100) }}%</span>
+        <span class="big-cap">모호한 세션 · {{ r1d.ambiguous_sessions }} / {{ r1d.sessions_armed }}</span>
+      </div>
+      <div class="col col-60">
+        <span class="col-tag">60분봉</span>
+        <span class="big">{{ '%.1f'|format(r60.ambiguity_rate*100) }}%</span>
+        <span class="big-cap">모호한 세션 · {{ r60.ambiguous_sessions }} / {{ r60.sessions_armed }}</span>
+      </div>
+    </div>
+    {% if reduction is not none %}
+    <div class="verdict">
+      <span class="field-label" style="margin:0">60분봉으로 줄어든 모호율</span>
+      <span class="verdict-num">{{ '%.1f'|format(reduction*100) }}%</span>
+      <span class="hydro">
+        {% if reduction > 0.30 %}
+          유료 인트라데이 데이터 구매의 수치적 근거가 됩니다.
+        {% elif reduction > 0.10 %}
+          효과는 있으나 결정적이지 않습니다. 실제 종목으로 재확인하세요.
+        {% else %}
+          이 정도면 60분봉을 살 이유가 약합니다.
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
+
+    <table class="tbl" style="margin-top:22px">
+      <thead>
+        <tr><th>항목</th><th>일봉 OHLC</th><th>60분봉</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>레벨을 걸어둔 세션</td><td class="num">{{ r1d.sessions_armed }}</td><td class="num">{{ r60.sessions_armed }}</td></tr>
+        <tr><td>진입 체결된 세션</td><td class="num">{{ r1d.sessions_entered }}</td><td class="num">{{ r60.sessions_entered }}</td></tr>
+        <tr><td>진입률</td><td class="num">{{ '%.1f'|format(r1d.entry_rate*100) }}%</td><td class="num">{{ '%.1f'|format(r60.entry_rate*100) }}%</td></tr>
+        <tr class="accent"><td>모호한 세션</td><td class="num">{{ r1d.ambiguous_sessions }}</td><td class="num">{{ r60.ambiguous_sessions }}</td></tr>
+        <tr><td>갭에서 체결된 건</td><td class="num">{{ r1d.gap_fills }}</td><td class="num">{{ r60.gap_fills }}</td></tr>
+        <tr><td>미체결 · 트리거 미도달</td><td class="num">{{ r1d.no_fill_no_trigger }}</td><td class="num">{{ r60.no_fill_no_trigger }}</td></tr>
+        <tr><td>미체결 · 지정가 초과 갭</td><td class="num">{{ r1d.no_fill_gap_through }}</td><td class="num">{{ r60.no_fill_gap_through }}</td></tr>
+        <tr><td>세션 종료 시 보유 중 (스윙)</td><td class="num">{{ r1d.open_at_session_end }}</td><td class="num">{{ r60.open_at_session_end }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">반쪽봉 검사</h2>
+      <span class="band-note">exclude_stubs 결정을 추론이 아니라 측정으로</span>
+    </div>
+    <table class="tbl">
+      <thead><tr><th>봉 종류</th><th>평균 실제레인지 (가격 대비)</th><th>표본</th></tr></thead>
+      <tbody>
+        <tr><td>30분 반쪽봉 (15:30)</td><td class="num">{{ '%.3f'|format(stub.stub_mean_tr_pct*100) }}%</td><td class="num">{{ stub.n_stub }}</td></tr>
+        <tr><td>60분 정상봉</td><td class="num">{{ '%.3f'|format(stub.full_mean_tr_pct*100) }}%</td><td class="num">{{ stub.n_full }}</td></tr>
+        <tr class="accent"><td>비율</td><td class="num">{{ '%.2f'|format(stub.ratio) }}×</td><td>{{ '반쪽봉이 더 넓다' if stub.ratio > 1 else '반쪽봉이 더 좁다' }}</td></tr>
+      </tbody>
+    </table>
+    <p class="band-note" style="margin-top:14px; display:block">
+      비율이 1보다 크면 처음의 직관 — “반쪽 길이니까 레인지도 좁겠지” — 이 틀렸다는 뜻입니다.
+      15:30~16:00은 종가 경매 구간이라 30분짜리가 오히려 하루 중 가장 넓은 봉일 수 있습니다.
+      편향의 방향은 종목마다 다르므로, 사전등록 문서에 고정하기 전에 실제 봉으로 확인하세요.
+    </p>
+  </section>
+
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">데이터 무결성</h2>
+      <span class="band-note">{{ '치명적 오류 있음' if rep.fatal else '통과' }}</span>
+    </div>
+    <table class="tbl">
+      <thead><tr><th>검사</th><th>값</th></tr></thead>
+      <tbody>
+        <tr><td>봉 개수</td><td class="num">{{ rep.n_bars }}</td></tr>
+        <tr><td>세션 수</td><td class="num">{{ rep.n_sessions }}</td></tr>
+        <tr><td>반쪽봉</td><td class="num">{{ rep.n_stub_bars }}</td></tr>
+        <tr><td>조기 종료일 (13:00)</td><td class="num">{{ rep.early_closes|length }}</td></tr>
+        <tr><td>중복 타임스탬프</td><td class="num">{{ rep.duplicate_timestamps }}</td></tr>
+        <tr><td>OHLC 논리 오류</td><td class="num">{{ rep.bad_ohlc|length }}</td></tr>
+        <tr><td>봉 격자 구멍</td><td class="num">{{ rep.grid_gaps|length }}</td></tr>
+        <tr><td>봉 개수 부족 세션</td><td class="num">{{ rep.short_sessions|length }}</td></tr>
+        <tr class="accent"><td>의심스러운 오버나이트 변동</td><td class="num">{{ rep.suspect_overnight|length }}</td></tr>
+      </tbody>
+    </table>
+    {% if rep.suspect_overnight %}
+    <ul class="flags">
+      {% for d,r in rep.suspect_overnight[:12] %}
+      <li>{{ d }} · 밤사이 {{ '%+.1f'|format(r*100) }}% — 액면분할 미조정일 가능성, 눈으로 확인 필요</li>
+      {% endfor %}
+    </ul>
+    <p class="band-note" style="margin-top:12px; display:block">
+      3배 ETF는 하루 12% 갭도 흔하므로 대부분 진짜 변동일 겁니다. 걸러내려는 건 분할 크기의 <em>불연속</em>입니다 —
+      미조정 분할은 백테스트에서 가장 수익성 높은 시그널로 잡히면서 조용히 성과를 부풀립니다.
+    </p>
+    {% endif %}
+  </section>
+
+  <p class="foot">
+    레벨 산출기: <code>{{ generator }}</code> — <strong>플레이스홀더입니다.</strong>
+    논증되지 않았고 검증되지 않았으며, 파라미터는 “그럴듯한 정도”로 골랐습니다.
+    엔진이 돌아가는지 확인하고 모호율을 측정할 대상을 주기 위해 존재합니다.
+    이걸 놔둔 상태로 나온 어떤 수익률도 이 껍데기를 측정한 것입니다.
+    <br><br>
+    이 화면은 주문을 넣지 않고 증권사 인증정보를 갖고 있지 않습니다. 측정 소요 {{ '%.1f'|format(elapsed) }}초.
+  </p>
+  {% endif %}
+
+</div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# Render Blueprint for the SURFER diagnostic viewer.
+#
+# This hosts a REPORT VIEWER, not trading automation. It reads market data and
+# renders a diagnostic. It places no orders and holds no credentials.
+services:
+  - type: web
+    name: surfer-diagnostic
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Long timeout: fetching 730 days of 60m bars can take a while.
+    startCommand: gunicorn app:app --timeout 180 --workers 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
