@@ -20,7 +20,7 @@ from diagnostics import purchase_case, resolution_comparison
 from backtest import Costs, buy_and_hold, curve_metrics, run_backtest, verdict
 from backtest import _stats as _bt_stats
 import board as board_mod
-from chart import annotated_session_svg, pick_example
+from chart import annotated_session_svg, pick_example, terminal_svg
 from levels import (PlaceholderBreakout, PriorCloseVolatilityBreakout,
                     PullbackToPriorLow, StructuralExit, VolatilityRegimeGate,
                     stub_range_ratio)
@@ -320,20 +320,22 @@ def levels_view():
         ctx["worksheet"] = board_mod.engine_worksheet(bd)
         from windows import describe_windows as _dw
         ctx["windows"] = _dw(ds)
-        # Draw the engine's own levels on real bars when it has any to draw.
-        if bd.signal.levels is not None:
-            sessions = ds.sessions
+        # Terminal view: all three panels share one x-axis, so the price frame
+        # and the percentile series must cover the same sessions.
+        SESSIONS_SHOWN = 20
+        series = board_mod.history_series(ds, sessions_back=SESSIONS_SHOWN)
+        if series.dates:
             by = {
                 d: g.sort_values("ts").reset_index(drop=True)
                 for d, g in ds.bars.groupby("session_date", sort=True)
             }
-            tail = sessions[-3:-1] if len(sessions) >= 3 else sessions[:-1]
-            hist = (pd.concat([by[s] for s in tail], ignore_index=True)
-                    if tail else by[sessions[-1]].iloc[:0])
-            ctx["chart_svg"] = annotated_session_svg(
-                hist, by[sessions[-1]], bd.signal.levels, None,
-                title=f"SURFER | {symbol}", theme="dark", animate=True,
+            frame = pd.concat([by[d] for d in series.dates], ignore_index=True)
+            ctx["chart_svg"] = terminal_svg(
+                frame, len(by[series.dates[-1]]), bd.signal.levels, series,
+                symbol, bd.signal.state.value, bd.signal.atr60,
+                bd.signal.atr_percentile, theme="dark", animate=True,
             )
+            ctx["series"] = series
     except Exception as e:
         import traceback
         ctx["error"] = f"{type(e).__name__}: {e}"

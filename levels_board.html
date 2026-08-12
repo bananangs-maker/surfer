@@ -167,11 +167,48 @@
     display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;
   }
 
+  /* --- micro-interactions: they exist to confirm the surface is live and
+         responsive, not to decorate. Each one answers "did that register?" --- */
+  .cell{transition:background .25s var(--ease), border-color .25s var(--ease)}
+  .cell:hover{background:rgba(233,231,226,.035)}
+  .px{transition:letter-spacing .3s var(--ease)}
+  .cell:hover .px{letter-spacing:.005em}
+  .plate{transition:border-color .3s var(--ease)}
+  .plate:hover{border-color:rgba(233,231,226,.34)}
+  .legend li{transition:padding-left .25s var(--ease), color .25s var(--ease)}
+  .legend li:hover{padding-left:40px}
+  .legend .n{transition:background .25s var(--ease), color .25s var(--ease)}
+  .legend li:hover .n{background:var(--ink); color:var(--paper)}
+  summary{position:relative}
+  summary::before{
+    content:""; position:absolute; left:-12px; top:50%; width:3px; height:0;
+    background:var(--ink); transform:translateY(-50%);
+    transition:height .28s var(--ease);
+  }
+  summary:hover::before,details[open] summary::before{height:60%}
+
+  /* Badge shimmer: one slow pass, so the state reads as current rather than
+     as a screenshot. */
+  .badge::before{
+    content:""; position:absolute; top:0; bottom:0; width:38%;
+    background:linear-gradient(90deg,transparent,rgba(233,231,226,.22),transparent);
+    transform:translateX(-140%); animation:shimmer 5.5s var(--ease) 1.4s infinite;
+  }
+  .badge.on::before{background:linear-gradient(90deg,transparent,rgba(14,16,20,.30),transparent)}
+  @keyframes shimmer{0%{transform:translateX(-140%)} 55%,100%{transform:translateX(320%)}}
+
+  /* Scroll reveal for anything below the fold. */
+  .reveal{opacity:0; transform:translateY(14px);
+    transition:opacity .55s var(--ease), transform .55s var(--ease)}
+  .reveal.in{opacity:1; transform:none}
+
   @keyframes fadeUp{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
   @keyframes unfold{from{opacity:0; transform:translateY(-6px)} to{opacity:1; transform:none}}
   @keyframes breathe{0%,100%{opacity:0} 50%{opacity:.13}}
   @media (prefers-reduced-motion:reduce){
     *{animation:none!important; transition:none!important}
+    .reveal{opacity:1!important; transform:none!important}
+    .badge::before{display:none}
   }
 </style>
 </head>
@@ -183,7 +220,8 @@
     <span class="tf">Time Frame | 60M</span>
   </div>
   <p class="sub">
-    {{ symbol }}{% if board %} · {{ board.last_complete }} 종료 · {{ sig.session }} 적용{% endif %}
+    {{ symbol }}{% if board %} · {{ board.last_complete }} 종료 · {{ sig.session }} 적용
+    · <span data-since="{{ '%.4f'|format(board.staleness_hours) }}">{{ '%.1f'|format(board.staleness_hours) }}h</span>{% endif %}
   </p>
 
   {% if error %}
@@ -259,12 +297,16 @@
   {% if chart_svg %}
   <div class="plate">{{ chart_svg|safe }}</div>
   <ol class="legend">
-    <li style="animation-delay:900ms"><span class="n">1</span><b>Trigger</b> —
-      진입이 발동하는 가격. 이 위로 거래되면 스톱리밋이 체결됩니다.</li>
-    <li style="animation-delay:960ms"><span class="n">2</span><b>Limit</b> —
-      받아들일 최악의 체결가. 갭이 이 선을 넘어가면 체결하지 않고 넘어갑니다.</li>
-    <li style="animation-delay:1020ms"><span class="n">3</span><b>Stop</b> —
-      진입 시점에 고정. 구조 청산이 이 위로 올라오면 그쪽이 정상 퇴출 경로가 됩니다.</li>
+    {% if sig.levels %}
+    <li style="animation-delay:900ms"><span class="n">1</span><b>TRG / LMT</b> —
+      트리거에 닿으면 발동, 리밋까지가 받아들일 가격 범위입니다. 갭이 리밋을 넘으면
+      체결하지 않고 넘어갑니다. 매집이 아니라 단일 스톱리밋 주문입니다.</li>
+    <li style="animation-delay:960ms"><span class="n">2</span><b>STP</b> —
+      진입 시점에 고정되는 손절. 이후 움직이지 않습니다.</li>
+    {% endif %}
+    <li style="animation-delay:1020ms"><span class="n">3</span><b>ATR PCTL</b> —
+      게이트의 입력입니다. 80 위(음영)면 진입 레벨을 산출하지 않습니다.
+      아래 패널이 그 결과를 세션별로 보여줍니다 — 채운 막대가 차단입니다.</li>
   </ol>
   {% endif %}
 
@@ -358,5 +400,59 @@
     <span>{{ board.engine_version if board else 'Surfer' }}</span>
   </div>
 </div>
+
+<script>
+(function () {
+  var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Count-up on the four prices. Eased, and it lands on the EXACT rendered
+  // string rather than a rounded reconstruction - a price that settles one tick
+  // away from the truth would be worse than no animation at all.
+  document.querySelectorAll(".px").forEach(function (el, i) {
+    var finalText = el.textContent.trim();
+    var target = parseFloat(finalText.replace(/,/g, ""));
+    if (still || !isFinite(target)) return;
+    var decimals = (finalText.split(".")[1] || "").length;
+    var dur = 620, delay = 220 + i * 70, t0 = null;
+    el.textContent = (0).toFixed(decimals);
+    function step(ts) {
+      if (t0 === null) t0 = ts;
+      var p = Math.min(1, (ts - t0) / dur);
+      var e = 1 - Math.pow(1 - p, 3);
+      el.textContent = (target * e).toFixed(decimals);
+      if (p < 1) requestAnimationFrame(step);
+      else el.textContent = finalText;   // exact, always
+    }
+    setTimeout(function () { requestAnimationFrame(step); }, delay);
+  });
+
+  // Reveal folded sections as they enter view.
+  var targets = document.querySelectorAll("details, .legend li");
+  if (still || !("IntersectionObserver" in window)) {
+    targets.forEach(function (t) { t.classList.add("in"); });
+  } else {
+    targets.forEach(function (t) { t.classList.add("reveal"); });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
+      });
+    }, { rootMargin: "0px 0px -8% 0px" });
+    targets.forEach(function (t) { io.observe(t); });
+  }
+
+  // Staleness ticks, so an old page cannot pass for a fresh one. The clock is
+  // the one thing here that is genuinely live; everything else is a snapshot.
+  var clock = document.querySelector("[data-since]");
+  if (clock) {
+    var base = parseFloat(clock.getAttribute("data-since"));
+    var t0 = Date.now();
+    (function tick() {
+      var h = base + (Date.now() - t0) / 3600000;
+      clock.textContent = h.toFixed(1) + "h";
+      setTimeout(tick, 30000);
+    })();
+  }
+})();
+</script>
 </body>
 </html>

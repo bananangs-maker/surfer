@@ -240,3 +240,54 @@ def engine_worksheet(bd: EngineBoard) -> str:
         f"{lv.initial_stop if lv else (sig.position.stop if sig.position else '')},"
         f"{sig.effective_exit or ''},{bd.last_complete}+1,,,,",
     ])
+
+
+@dataclass
+class Series:
+    """Per-session series for the terminal sub-panels.
+
+    The percentile panel is not decoration: it is the gate's own input, drawn
+    against the threshold that governs it. Seeing 68 versus 94 against a line at
+    80 explains today's state in a way the word "gated" cannot.
+    """
+
+    dates: list
+    closes: list
+    percentiles: list      # None where history was insufficient
+    gate_open: list        # None where undetermined
+    threshold: float
+
+
+def history_series(ds, sessions_back: int = 120) -> Series:
+    """Replay the gate over recent sessions to recover its input and its state.
+
+    Replayed rather than logged, for the same reason the open position is: a log
+    can disagree with the price data after a missed run, and a replay cannot.
+    """
+    from engine import Engine
+
+    eng = Engine()
+    gate = eng.entry
+    sessions, _, _ = _complete_sessions(ds)
+    by = {
+        d: g.sort_values("ts").reset_index(drop=True)
+        for d, g in ds.bars.groupby("session_date", sort=True)
+    }
+    window = gate.lookback_sessions
+    dates, closes, pcts, opens = [], [], [], []
+
+    start = max(0, len(sessions) - sessions_back)
+    for i, sd in enumerate(sessions):
+        hist = [by[s] for s in sessions[max(0, i - window):i]]
+        pct = gate.percentile(hist)          # accumulates as it goes
+        if i < start:
+            continue
+        dates.append(sd)
+        closes.append(float(by[sd]["close"].iloc[-1]))
+        pcts.append(pct)
+        opens.append(None if pct is None else pct < gate.BLOCK_AT_PERCENTILE)
+
+    return Series(
+        dates=dates, closes=closes, percentiles=pcts, gate_open=opens,
+        threshold=float(gate.BLOCK_AT_PERCENTILE),
+    )

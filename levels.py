@@ -515,37 +515,45 @@ class VolatilityRegimeGate:
         if len(history) < 30:
             return None
 
+        # Ensure a reading exists for EVERY session in the trailing window, not
+        # merely for the newest one.
+        #
+        # BUG THIS FIXES (found 2026-08-12, after §11 was measured): callers only
+        # ask the gate for levels when FLAT - run_backtest and replay_position both
+        # skip the generator while a position is held. The store therefore
+        # developed holes wherever the engine happened to be holding, and
+        # "trailing 252 sessions" silently became "the last 252 sessions in which
+        # this engine was flat", reaching much further back and mixing in older
+        # volatility.
+        #
+        # That made the gate's input depend on the engine's own trading history -
+        # self-referential, and invisible in the output. Backfilling here makes
+        # the gate correct regardless of how the caller drives it, which is the
+        # right place for the guarantee: a rule should not depend on being invoked
+        # on a particular schedule.
+        # Walk backwards and stop at the first session already known. Sessions
+        # arrive in order, so everything older than that is present too - scanning
+        # the whole window every call cost 5x for nothing.
+        missing: list[int] = []
+        for k in range(len(history), 0, -1):
+            t = history[k - 1]
+            if len(t) == 0:
+                continue
+            if t["ts"].iloc[-1] in self._atr_series:
+                break
+            missing.append(k)
+        for k in reversed(missing):
+            a = atr60(history[max(0, k - 12):k])
+            if a is not None:
+                self._remember(history[k - 1]["ts"].iloc[-1], a)
+
         tail = history[-1]
         if len(tail) == 0:
             return None
         key = tail["ts"].iloc[-1]
-        if key not in self._atr_series:
-            a = atr60(history[-12:])
-            if a is None:
-                return None
-            self._remember(key, a)
-        elif len(self._atr_series) < 30:
+        if key not in self._atr_series or len(self._atr_series) < 30:
             return None
 
-        # Backfill on a cold start: without it the first call would have a
-        # one-element distribution and every session would read as percentile 100.
-        if len(self._atr_series) < 30:
-            for k in range(20, len(history)):
-                t = history[k - 1]
-                if len(t) == 0:
-                    continue
-                kk = t["ts"].iloc[-1]
-                if kk not in self._atr_series:
-                    a = atr60(history[max(0, k - 12):k])
-                    if a is not None:
-                        self._remember(kk, a)
-
-        # Kept ordered by bisect insertion rather than sorted on every call.
-        # Sorting the whole store per session cost more than the rule it gates.
-        # Order must be by session timestamp, NOT insertion: the first version
-        # inserted the current session before back-filling older ones, so the
-        # newest reading sat at position 0 and the trailing-252 slice took the
-        # wrong sessions entirely - with entirely plausible-looking output.
         vals = [v for _, v in self._ordered]
         if len(vals) < 30:
             return None

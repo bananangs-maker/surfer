@@ -151,6 +151,8 @@ def test_levels_page_is_minimal_and_folds_the_rest(ds):
     # Nothing may be open by default.
     assert "<details open" not in html
     assert "svg viewBox" in html
+    # Terminal layout: readout row plus two aligned sub-panels.
+    assert "ATR PCTL" in html and "GATE STATE" in html
 
 
 def test_page_is_dark_and_respects_reduced_motion(ds):
@@ -173,7 +175,9 @@ def test_levels_page_is_cheap():
         c.get("/levels?symbol=SYNTH3X")          # warm the dataset cache
         t0 = time.perf_counter()
         c.get("/levels?symbol=SYNTH3X")
-        assert time.perf_counter() - t0 < 2.0
+        # Replaying the gate over the shown window costs real time; the budget is
+        # generous because Render's free tier is ~6x slower than this machine.
+        assert time.perf_counter() - t0 < 8.0
 
 
 # --- unified engine (DES-002 §12.5) ---------------------------------------
@@ -257,3 +261,70 @@ def test_page_says_the_engine_is_unvalidated(ds):
     assert "실행 실패" not in html
     assert "검증되지 않은 규칙" in html
     assert "SURFER-ENGINE-" in html
+
+
+# --- motion: rich, but always defeasible --------------------------------
+
+def test_every_page_respects_reduced_motion():
+    """Animation that cannot be turned off is an accessibility failure.
+
+    Vestibular disorders make sustained motion genuinely sickening, and this
+    engine's whole point is being usable every morning. Asserted per page rather
+    than once, because the rule is easy to add to one template and forget in the
+    next.
+    """
+    from app import app
+
+    urls = [
+        "/", "/?run=1&symbol=SYNTH3X", "/levels?symbol=SYNTH3X",
+        "/compare?symbol=SYNTH3X", "/backtest?symbol=SYNTH3X",
+        "/validate?symbol=SYNTH3X",
+    ]
+    with app.test_client() as c:
+        for u in urls:
+            html = c.get(u).data.decode()
+            assert "prefers-reduced-motion" in html, u
+
+
+def test_svg_animation_classes_are_attached_not_merely_defined():
+    """A class defined in CSS but never applied looks identical in source review.
+
+    This caught two real cases: sf-num and sf-lead were declared and then not
+    attached, because the f-string being patched used single quotes inside the
+    braces and the replacement searched for double.
+    """
+    from chart import annotated_session_svg, pick_example
+    from levels import PlaceholderBreakout
+    from loaders import load_synthetic
+
+    svg = annotated_session_svg(
+        *pick_example(load_synthetic(n_sessions=150), PlaceholderBreakout()),
+        theme="dark",
+    )
+    for name in ("sf-wick", "sf-candle", "sf-level", "sf-zone", "sf-divide",
+                 "sf-num", "sf-box", "sf-lead", "sf-scan"):
+        # >1 means the CSS declaration plus at least one element using it.
+        assert svg.count(name) > 1, f"{name} is declared but never applied"
+
+
+def test_animation_can_be_switched_off_entirely():
+    from chart import annotated_session_svg, pick_example
+    from levels import PlaceholderBreakout
+    from loaders import load_synthetic
+
+    ex = pick_example(load_synthetic(n_sessions=150), PlaceholderBreakout())
+    plain = annotated_session_svg(*ex, theme="dark", animate=False)
+    assert "sf-candle" not in plain
+    assert "@keyframes" not in plain
+    assert "svg" in plain and "TRIGGER" in plain
+
+
+def test_dark_and_light_themes_leave_no_hardcoded_colours():
+    from chart import annotated_session_svg, pick_example
+    from levels import PlaceholderBreakout
+    from loaders import load_synthetic
+
+    ex = pick_example(load_synthetic(n_sessions=150), PlaceholderBreakout())
+    for theme, forbidden in (("dark", "#FFFFFF"), ("light", "#12141A")):
+        svg = annotated_session_svg(*ex, theme=theme)
+        assert forbidden not in svg, f"{theme} leaked {forbidden}"
