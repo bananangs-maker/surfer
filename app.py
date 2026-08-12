@@ -367,7 +367,7 @@ def levels_view():
         symbol = "SYNTH3X"
     ctx = {"symbols": SYMBOLS, "symbol": symbol, "board": None, "sig": None,
            "worksheet": "", "error": None, "chart_svg": None,
-           "rate_limited": None, "ds_age_h": 0.0}
+           "rate_limited": None, "ds_age_h": 0.0, "bars_json": None}
     try:
         ds, ds_age = get_dataset(symbol)
         ctx["ds_age_h"] = ds_age / 3600.0
@@ -393,6 +393,16 @@ def levels_view():
                 bd.signal.atr_percentile, theme="dark", animate=True,
             )
             ctx["series"] = series
+            # Bars for the pointer readout. Emitted as JSON rather than as data
+            # attributes on 140 rects: one parse beats 140 DOM lookups per move.
+            import json as _json
+            ny = frame["ts"].dt.tz_convert("America/New_York")
+            ctx["bars_json"] = _json.dumps([
+                {"o": round(float(r.open), 6), "h": round(float(r.high), 6),
+                 "l": round(float(r.low), 6), "c": round(float(r.close), 6),
+                 "t": t.strftime("%m-%d %H:%M")}
+                for r, t in zip(frame.itertuples(), ny)
+            ], separators=(",", ":"))
     except RateLimited as e:
         ctx["rate_limited"] = str(e)
     except Exception as e:

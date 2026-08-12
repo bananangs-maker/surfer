@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#0E1014; --sheet:#12141A; --ink:#E9E7E2; --dim:#8C8F98;
+    --paper:#0B0D11; --sheet:#12141A; --ink:#E9E7E2; --dim:#8C8F98;
     --hair:rgba(233,231,226,.16); --hair-soft:rgba(233,231,226,.07);
     --ease:cubic-bezier(.22,.7,.24,1);
   }
@@ -59,6 +59,54 @@
     letter-spacing:.16em; text-transform:uppercase; color:var(--dim)}
   @keyframes fadeUp{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
   @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+
+  /* --- shared motion, matching /levels --- */
+  .reveal{opacity:0; transform:translateY(14px);
+    transition:opacity .55s cubic-bezier(.22,.7,.24,1), transform .55s cubic-bezier(.22,.7,.24,1)}
+  .reveal.in{opacity:1; transform:none}
+  @keyframes sfFadeUp{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
+  .cartouche,.controls,.band,.notice,.caution{animation:sfFadeUp .5s cubic-bezier(.22,.7,.24,1) both}
+  .controls{animation-delay:70ms} .band{animation-delay:140ms}
+  .tbl tr,.grid tr{transition:background .22s cubic-bezier(.22,.7,.24,1)}
+  .tbl tbody tr:hover,.grid tbody tr:hover{background:rgba(233,231,226,.04)}
+  .plate{transition:border-color .3s cubic-bezier(.22,.7,.24,1)}
+  .plate:hover{border-color:rgba(233,231,226,.34)}
+  .big,.px,.verdict-num{transition:letter-spacing .3s cubic-bezier(.22,.7,.24,1)}
+  .col:hover .big,.vcol:hover .big{letter-spacing:-.005em}
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important; transition:none!important}
+    .reveal{opacity:1!important; transform:none!important}
+  }
+
+  /* --- seamless dense surface, matching /levels --- */
+  body{background:#0B0D11}
+  .cartouche,.controls,.notice,.caution,.card,.plate,.rail,.scroll,pre,select{
+    background:#0B0D11!important
+  }
+  .cartouche,.controls,.notice,.caution,.card,.rail,.scroll{
+    border-left:none!important; border-right:none!important;
+    border-top:none!important;
+  }
+  .cartouche{padding:10px 0 12px!important; margin-bottom:10px!important}
+  .controls{padding:10px 0!important; margin-bottom:10px!important}
+  .notice,.caution{padding:9px 0 9px 12px!important; margin-bottom:10px!important;
+    border-left:2px solid var(--ink)!important}
+  .wrap,.sheet{padding:14px 14px 26px!important; max-width:1120px!important}
+  .band{margin-bottom:14px!important}
+  .band-head{padding-bottom:5px!important; margin-bottom:9px!important}
+  .band-title{font-size:14px!important}
+  .band-note{font-size:11.5px!important}
+  .mark{font-size:23px!important; letter-spacing:.18em!important}
+  .mark-sub,.tf{font-size:11px!important}
+  th,td{padding:5px 9px!important; font-size:12.5px!important}
+  thead th{font-size:10px!important}
+  .field-label{font-size:9.5px!important; margin-bottom:0!important}
+  .field-value{font-size:12px!important}
+  .big{font-size:clamp(22px,3.4vw,30px)!important}
+  .cell,.col,.vcol{padding:9px 12px!important}
+  pre{font-size:10.5px!important; padding:9px!important}
+  .foot{margin-top:12px!important; font-size:9.5px!important}
+  p{margin:0 0 7px}
 </style>
 </head>
 <body>
@@ -178,5 +226,22 @@
 
   <p class="foot"><a href="/levels">신호</a> · <a href="/">진단</a> · <a href="/compare">후보 비교</a></p>
 </div>
+
+<script>
+(function(){
+  var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var t = document.querySelectorAll(".band, details, .notice, .caution");
+  if (still || !("IntersectionObserver" in window)) {
+    t.forEach(function(e){ e.classList.add("in"); }); return;
+  }
+  t.forEach(function(e){ e.classList.add("reveal"); });
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(en){
+      if (en.isIntersecting){ en.target.classList.add("in"); io.unobserve(en.target); }
+    });
+  }, { rootMargin: "0px 0px -8% 0px" });
+  t.forEach(function(e){ io.observe(e); });
+})();
+</script>
 </body>
 </html>

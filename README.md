@@ -100,7 +100,7 @@ windows.py        mechanical lock on the validation window
 app.py            web viewer: / diagnostic, /levels, /compare, /backtest
 report_template.html, backtest.html, levels_board.html, compare.html
 run_diagnostic.py CLI
-test_*.py         121 tests
+test_*.py         125 tests
 SURFER-DES-001.md pre-registration, use 1 (ON HOLD)
 SURFER-DES-002.md pre-registration, use 2 (ACTIVE)
 ```
@@ -198,11 +198,21 @@ weight. In dark mode a bright filled candle reads as "up" to most people, which
 is the opposite of the convention, so the chart states `HOLLOW UP / SOLID DOWN`
 in its footer rather than leaving it to be guessed.
 
-`/levels` is chart-dominant: masthead, state badge, four prices, the chart. Every
-other panel is a collapsed `<details>` — engine spec, data status, worksheet,
-symbol picker, navigation. The value of the screen is that one glance answers
-"what do I place today", and each panel above the fold erodes that. A test pins
-it: at least five folded sections, none open by default.
+`/levels` is a terminal, not a document: **one continuous surface**, no card
+edges, no panel fills, minimal padding. The chart's own `paper` colour is `none`
+so it blends into the page — a bordered panel reads as a figure pasted in, and the
+reference is a trading terminal. Everything folds into collapsed `<details>`;
+a test pins at least five folded sections with none open by default. The whole
+page fits roughly one viewport.
+
+**Pointer interaction.** A crosshair follows the cursor and **snaps to the nearest
+bar** — a crosshair floating between bars invites reading a price no bar had. The
+readout row above the chart switches to that bar's OHLC, change and timestamp, and
+the right axis shows the price under the cursor. Bars ship as one JSON blob rather
+than as attributes on 140 rects: one parse beats 140 DOM lookups per move. The
+readout row is a sibling of the chart, not an overlay on it — as an overlay it
+covered the indicator line and nothing movable inside the SVG could separate
+them.
 
 ### Motion
 

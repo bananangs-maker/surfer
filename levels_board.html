@@ -13,8 +13,8 @@
        rather than recolouring them: paper becomes near-black, ink becomes bone,
        zone greys sit between. No hue is introduced - a monochrome sheet cannot
        imply that one outcome is the good one. */
-    --paper:#0E1014;
-    --sheet:#12141A;
+    --paper:#0B0D11;
+    --sheet:#0B0D11;        /* same as paper: no panel edges anywhere */
     --ink:#E9E7E2;
     --dim:#8C8F98;
     --hair:rgba(233,231,226,.16);
@@ -28,38 +28,39 @@
     font-family:'Barlow',system-ui,sans-serif; font-size:16px; line-height:1.6;
     -webkit-font-smoothing:antialiased;
   }
-  .sheet{max-width:1000px; margin:0 auto; padding:44px 22px 120px}
+  .sheet{max-width:1120px; margin:0 auto; padding:14px 14px 26px}
 
   /* ---- masthead: title left, timeframe right, as in the reference ---- */
   .head{
-    display:flex; justify-content:space-between; align-items:baseline;
-    gap:16px; flex-wrap:wrap; margin-bottom:8px;
+    display:flex; justify-content:space-between; align-items:center;
+    gap:10px; flex-wrap:wrap; margin-bottom:2px;
     animation:fadeUp .5s var(--ease) both;
   }
   .mark{
     font-family:'Barlow Condensed',sans-serif; font-weight:700;
-    font-size:clamp(26px,4.4vw,38px); letter-spacing:.2em;
+    font-size:clamp(17px,2.6vw,23px); letter-spacing:.18em;
     text-transform:uppercase; line-height:1; margin:0;
   }
   .tf{
     font-family:'Barlow Condensed',sans-serif; font-weight:600;
-    font-size:clamp(14px,2.2vw,19px); letter-spacing:.2em; text-transform:uppercase;
+    font-size:clamp(10px,1.5vw,12px); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--dim);
   }
   .sub{
-    font-family:'Barlow Condensed',sans-serif; font-size:12.5px; letter-spacing:.18em;
-    text-transform:uppercase; color:var(--dim); margin:0 0 30px;
+    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.04em;
+    color:var(--dim); margin:0 0 8px;
     animation:fadeUp .5s var(--ease) 60ms both;
   }
 
   /* ---- state line: the one thing readable at a glance ---- */
   .state{
-    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
-    padding:0 0 22px; margin-bottom:26px; border-bottom:1px solid var(--hair);
+    display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+    padding:0 0 8px; margin-bottom:8px; border-bottom:1px solid var(--hair-soft);
     animation:fadeUp .5s var(--ease) 120ms both;
   }
   .badge{
-    font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px;
-    letter-spacing:.2em; text-transform:uppercase; padding:5px 14px;
+    font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:11px;
+    letter-spacing:.18em; text-transform:uppercase; padding:3px 10px;
     border:1.5px solid var(--ink); position:relative; overflow:hidden;
   }
   .badge.on{background:var(--ink); color:var(--paper)}
@@ -67,58 +68,65 @@
     content:""; position:absolute; inset:0; background:var(--ink); opacity:0;
     animation:breathe 2.8s ease-in-out infinite;
   }
-  .state-text{font-size:17px}
-  .state-meta{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--dim)}
+  .state-text{font-size:13px}
+  .state-meta{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--dim)}
 
   /* ---- price rail: four numbers, nothing else ---- */
   .rail{
-    display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
-    border:1px solid var(--hair); background:var(--sheet); margin-bottom:26px;
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(112px,1fr));
+    border-bottom:1px solid var(--hair-soft); margin-bottom:6px;
   }
   .cell{
-    padding:16px 18px; border-right:1px solid var(--hair-soft);
-    animation:fadeUp .45s var(--ease) both;
+    padding:7px 12px 8px 0; animation:fadeUp .45s var(--ease) both;
+    position:relative;
   }
+  .cell::after{
+    content:""; position:absolute; left:0; bottom:0; height:1px; width:0;
+    background:var(--ink); transition:width .3s var(--ease);
+  }
+  .cell:hover::after{width:100%}
   .cell:last-child{border-right:none}
   .cell-lab{
-    font-family:'Barlow Condensed',sans-serif; font-size:11px; letter-spacing:.16em;
-    text-transform:uppercase; color:var(--dim); display:block; margin-bottom:5px;
+    font-family:'Barlow Condensed',sans-serif; font-size:9.5px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--dim); display:block; margin-bottom:1px;
   }
   .px{
-    font-family:'IBM Plex Mono',monospace; font-size:clamp(20px,3.2vw,25px);
-    font-weight:600; letter-spacing:-.01em;
+    font-family:'IBM Plex Mono',monospace; font-size:clamp(15px,2.3vw,19px);
+    font-weight:600; letter-spacing:-.01em; line-height:1.15;
   }
-  .px-sub{font-size:11.5px; color:var(--dim); display:block; margin-top:4px}
+  .px-sub{font-size:9.5px; color:var(--dim); display:block; margin-top:1px}
 
   /* ---- the chart owns the page ---- */
+  /* No border, no background: the chart is the surface, not a figure on it. */
   .plate{
-    border:1px solid var(--hair); background:var(--sheet); overflow:hidden;
+    position:relative; margin:0 -4px; cursor:crosshair;
     animation:fadeUp .6s var(--ease) 180ms both;
   }
-  .plate svg{display:block; width:100%; height:auto}
-  .legend{list-style:none; margin:20px 0 0; padding:0}
+  .plate svg{display:block; width:100%; height:auto; max-height:70vh}
+  .legend{list-style:none; margin:6px 0 0; padding:0}
   .legend li{
-    position:relative; padding:10px 0 10px 34px; font-size:14.5px;
-    border-bottom:1px solid var(--hair-soft);
+    position:relative; padding:5px 0 5px 26px; font-size:11.5px; color:var(--dim);
+    border-bottom:1px solid var(--hair-soft); line-height:1.5;
     animation:fadeUp .45s var(--ease) both;
   }
   .legend .n{
-    position:absolute; left:0; top:10px; width:21px; height:21px; border-radius:50%;
+    position:absolute; left:0; top:6px; width:16px; height:16px; border-radius:50%;
+    font-size:9px;
     border:1.2px solid var(--ink); display:flex; align-items:center;
     justify-content:center; font-family:'IBM Plex Mono',monospace;
     font-size:11px; font-weight:600;
   }
-  .legend b{font-family:'Barlow Condensed',sans-serif; letter-spacing:.12em; font-weight:600}
+  .legend b{font-family:'Barlow Condensed',sans-serif; letter-spacing:.1em; font-weight:600; color:var(--ink)}
 
   /* ---- everything else folds away ---- */
   details{border-top:1px solid var(--hair); animation:fadeUp .45s var(--ease) both}
   details:last-of-type{border-bottom:1px solid var(--hair)}
   summary{
-    cursor:pointer; list-style:none; padding:16px 2px; display:flex;
+    cursor:pointer; list-style:none; padding:8px 2px; display:flex;
     align-items:center; justify-content:space-between; gap:12px;
-    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:14px;
-    letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
-    transition:color .22s var(--ease);
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:11px;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--dim);
+    transition:color .22s var(--ease), background .22s var(--ease);
   }
   summary:hover,summary:focus-visible{color:var(--ink)}
   summary::-webkit-details-marker{display:none}
@@ -128,8 +136,8 @@
   }
   details[open] summary{color:var(--ink)}
   details[open] summary .plus{transform:rotate(45deg); color:var(--ink)}
-  .fold{padding:2px 2px 26px; animation:unfold .4s var(--ease) both}
-  .fold p{margin:0 0 10px; font-size:14.5px}
+  .fold{padding:2px 2px 14px; animation:unfold .4s var(--ease) both}
+  .fold p{margin:0 0 7px; font-size:12px; line-height:1.55}
   .fold p:last-child{margin:0}
   .quiet{color:var(--dim); font-style:italic}
   .warn{border-left:2px solid var(--ink); padding-left:14px}
@@ -162,7 +170,7 @@
   }
   .controls{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
   .foot{
-    margin-top:34px; font-family:'Barlow Condensed',sans-serif; font-size:11.5px;
+    margin-top:12px; font-family:'Barlow Condensed',sans-serif; font-size:9.5px;
     letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
     display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;
   }
@@ -174,7 +182,7 @@
   .px{transition:letter-spacing .3s var(--ease)}
   .cell:hover .px{letter-spacing:.005em}
   .plate{transition:border-color .3s var(--ease)}
-  .plate:hover{border-color:rgba(233,231,226,.34)}
+
   .legend li{transition:padding-left .25s var(--ease), color .25s var(--ease)}
   .legend li:hover{padding-left:40px}
   .legend .n{transition:background .25s var(--ease), color .25s var(--ease)}
@@ -201,6 +209,35 @@
   .reveal{opacity:0; transform:translateY(14px);
     transition:opacity .55s var(--ease), transform .55s var(--ease)}
   .reveal.in{opacity:1; transform:none}
+
+  /* Pointer readout, in the top-left of the plot as a terminal puts it. Hidden
+     until the pointer is over the chart so it never asserts a value nobody asked
+     about. */
+  /* A dedicated row above the chart rather than an overlay inside it. As an
+     overlay it sat on top of the readout line and both became unreadable - and no
+     amount of moving things inside the SVG could fix that, because the overlay
+     was outside it. */
+  .hudrow{
+    display:flex; gap:5px; align-items:baseline; min-height:15px;
+    font-family:'IBM Plex Mono',monospace; font-size:9.5px; white-space:nowrap;
+    overflow-x:auto; scrollbar-width:none; padding:1px 0 2px;
+    border-bottom:1px solid var(--hair-soft); margin-bottom:2px;
+  }
+  .hudrow::-webkit-scrollbar{display:none}
+  .hud-k{color:var(--dim)}
+  .hud-v{color:var(--ink); font-weight:600; transition:color .15s var(--ease)}
+  .hud-t{color:var(--dim); margin-left:4px}
+  .hud-idle{color:var(--dim); font-style:italic; font-size:9px}
+  .hudrow.live .hud-idle{display:none}
+  .hudrow:not(.live) .hud-k,.hudrow:not(.live) .hud-v,.hudrow:not(.live) .hud-t{
+    opacity:.32
+  }
+
+  /* Continuous: the armed trigger line marches, so a page left open still reads
+     as attached to something. Slow enough to sit below notice. */
+  #sf-term .sf-level{stroke-dasharray:5 4}
+  #sf-term .sf-level:nth-of-type(odd){animation:sfMarch 9s linear infinite}
+  @keyframes sfMarch{to{stroke-dashoffset:-36}}
 
   @keyframes fadeUp{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
   @keyframes unfold{from{opacity:0; transform:translateY(-6px)} to{opacity:1; transform:none}}
@@ -308,7 +345,17 @@
   {% endif %}
 
   {% if chart_svg %}
-  <div class="plate">{{ chart_svg|safe }}</div>
+  <div class="hudrow" id="sf-hud" aria-hidden="true">
+      <span class="hud-k">O</span><span class="hud-v" data-k="o">—</span>
+      <span class="hud-k">H</span><span class="hud-v" data-k="h">—</span>
+      <span class="hud-k">L</span><span class="hud-v" data-k="l">—</span>
+      <span class="hud-k">C</span><span class="hud-v" data-k="c">—</span>
+      <span class="hud-k">Δ</span><span class="hud-v" data-k="d">—</span>
+    <span class="hud-t" data-k="t"></span>
+    <span class="hud-idle">커서를 차트에 올리면 봉 값이 표시됩니다</span>
+  </div>
+  <div class="plate" id="sf-plate">{{ chart_svg|safe }}</div>
+  {% if bars_json %}<script type="application/json" id="sf-bars">{{ bars_json|safe }}</script>{% endif %}
   <ol class="legend">
     {% if sig.levels %}
     <li style="animation-delay:900ms"><span class="n">1</span><b>TRG / LMT</b> —
@@ -323,7 +370,7 @@
   </ol>
   {% endif %}
 
-  <div style="height:34px"></div>
+
 
   <details>
     <summary>이 신호는 검증되지 않았습니다 <span class="plus">+</span></summary>
@@ -452,6 +499,68 @@
     }, { rootMargin: "0px 0px -8% 0px" });
     targets.forEach(function (t) { io.observe(t); });
   }
+
+  // ---- pointer readout + crosshair -----------------------------------
+  // Snaps to the nearest bar rather than tracking the raw pointer: a crosshair
+  // between two bars invites reading a price that no bar had.
+  (function () {
+    var plate = document.getElementById("sf-plate");
+    var svg = document.getElementById("sf-term");
+    var raw = document.getElementById("sf-bars");
+    if (!plate || !svg || !raw) return;
+    var bars;
+    try { bars = JSON.parse(raw.textContent); } catch (e) { return; }
+    if (!bars.length) return;
+
+    var d = svg.dataset;
+    var x0 = +d.x0, step = +d.step, top = +d.top, bot = +d.bot;
+    var lo = +d.lo, hi = +d.hi, right = +d.right, deep = +d.deep;
+    var g = document.getElementById("sf-cross");
+    var cx = document.getElementById("sf-cx"), cy = document.getElementById("sf-cy");
+    var box = document.getElementById("sf-cbox"), val = document.getElementById("sf-cval");
+    var hud = document.getElementById("sf-hud");
+    var cells = {};
+    hud.querySelectorAll("[data-k]").forEach(function (e) { cells[e.dataset.k] = e; });
+
+    function toView(ev) {
+      var r = svg.getBoundingClientRect();
+      var vb = svg.viewBox.baseVal;
+      return {
+        x: (ev.clientX - r.left) / r.width * vb.width,
+        y: (ev.clientY - r.top) / r.height * vb.height
+      };
+    }
+
+    function move(ev) {
+      var pt = toView(ev);
+      var i = Math.round((pt.x - x0) / step - 0.5);
+      if (i < 0) i = 0; if (i >= bars.length) i = bars.length - 1;
+      var b = bars[i];
+      var bx = x0 + step * (i + 0.5);
+      var y = Math.max(top, Math.min(deep, pt.y));
+      var price = hi - (y - top) / (bot - top) * (hi - lo);
+
+      cx.setAttribute("x1", bx); cx.setAttribute("x2", bx);
+      cy.setAttribute("y1", y);  cy.setAttribute("y2", y);
+      box.setAttribute("y", y - 6);
+      val.setAttribute("y", y + 2.6);
+      val.textContent = price.toFixed(2);
+      g.style.opacity = 1;
+
+      cells.o.textContent = b.o.toFixed(4);
+      cells.h.textContent = b.h.toFixed(4);
+      cells.l.textContent = b.l.toFixed(4);
+      cells.c.textContent = b.c.toFixed(4);
+      var dp = (b.c / b.o - 1) * 100;
+      cells.d.textContent = (dp >= 0 ? "+" : "") + dp.toFixed(2) + "%";
+      cells.t.textContent = b.t;
+      hud.classList.add("live");
+    }
+
+    function leave() { g.style.opacity = 0; hud.classList.remove("live"); }
+    plate.addEventListener("pointermove", move);
+    plate.addEventListener("pointerleave", leave);
+  })();
 
   // Staleness ticks, so an old page cannot pass for a fresh one. The clock is
   // the one thing here that is genuinely live; everything else is a snapshot.

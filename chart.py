@@ -30,9 +30,12 @@ PAD_L, PAD_R, PAD_T, PAD_B = 96.0, 132.0, 64.0, 72.0
 # only thing that changes is which end of the scale is paper.
 THEMES = {
     "dark": {
-        "paper": "#12141A", "ink": "#E9E7E2", "dim": "#8C8F98",
-        "zone": "#252932", "grid": "#2A2E38", "hatch": "#E9E7E2",
-        "up_fill": "#12141A",     # hollow
+        # `paper` is "none": the chart must not sit on a panel of its own.
+        # A bordered card reads as a figure pasted into a page; a terminal reads as
+        # one continuous surface, and the reference is the latter.
+        "paper": "none", "ink": "#E9E7E2", "dim": "#7E8189",
+        "zone": "#1C2027", "grid": "#22262E", "hatch": "#E9E7E2",
+        "up_fill": "#0B0D11",     # hollow, matching the page
         "down_fill": "#E9E7E2",   # solid
     },
     "light": {
@@ -408,12 +411,12 @@ def pick_example(ds, generator, prefer_ambiguous: bool = True):
 # at 80 explains it immediately.
 # ============================================================
 
-TW, TH = 400.0, 566.0
-T_AXIS = 56.0          # right-hand price gutter
+TW, TH = 760.0, 470.0
+T_AXIS = 62.0          # right-hand price gutter
 T_L = 6.0
-_P1 = (34.0, 330.0)    # price panel: top, bottom
-_P2 = (376.0, 452.0)   # percentile panel
-_P3 = (466.0, 536.0)   # gate-state panel
+_P1 = (40.0, 272.0)    # price panel: top, bottom
+_P2 = (312.0, 372.0)   # percentile panel
+_P3 = (398.0, 448.0)   # gate-state panel
 
 
 def terminal_svg(
@@ -474,10 +477,13 @@ def terminal_svg(
 
     o: list[str] = [
         f'<svg viewBox="0 0 {TW:.0f} {TH:.0f}" xmlns="http://www.w3.org/2000/svg" '
+        f'id="sf-term" '
+        f'data-x0="{T_L}" data-step="{step:.5f}" data-n="{n}" '
+        f'data-top="{_P1[0]}" data-bot="{_P1[1]}" data-lo="{lo:.6f}" '
+        f'data-hi="{hi:.6f}" data-right="{plot_r:.1f}" data-deep="{_P3[1]}" '
         f'role="img" aria-label="{_esc(symbol)} 60분봉 터미널 — 가격 패널, '
         f'ATR 백분위 패널, 게이트 상태 패널">',
         A,
-        f'<rect x="0" y="0" width="{TW}" height="{TH}" fill="{C["paper"]}"/>',
     ]
 
     def txt(x, y, s, size=7.0, fill=None, anchor="start", weight=400,
@@ -501,9 +507,9 @@ def terminal_svg(
         row.append(("R", f"{levels.entry_trigger - levels.initial_stop:.4f}"))
     x = T_L
     for i, (k, v) in enumerate(row):
-        txt(x, 12, k, 6.4, C["dim"], extra=cls("sf-note", 60 + i * 45))
-        txt(x, 22, v, 8.2, C["ink"], weight=600, extra=cls("sf-note", 90 + i * 45))
-        x += max(52.0, len(v) * 5.0 + 20.0)
+        txt(x, 11, k, 6.2, C["dim"], extra=cls("sf-note", 60 + i * 45))
+        txt(x, 22, v, 8.4, C["ink"], weight=600, extra=cls("sf-note", 90 + i * 45))
+        x += max(56.0, len(v) * 4.8 + 22.0)
 
     # ---- price panel ------------------------------------------------------
     o.append(
@@ -602,7 +608,10 @@ def terminal_svg(
     sw = plot_w / max(m, 1)
 
     def qy(v: float) -> float:
-        return _P2[0] + (100.0 - v) / 100.0 * (_P2[1] - _P2[0])
+        # 4px inset top and bottom so the 100 and 0 labels are not clipped by the
+        # panel rule; the line sat flush against the top edge before.
+        a, b2 = _P2[0] + 4.0, _P2[1] - 4.0
+        return a + (100.0 - v) / 100.0 * (b2 - a)
 
     ty = qy(series.threshold)
     o.append(
@@ -643,7 +652,7 @@ def terminal_svg(
             continue
         x0 = T_L + sw * i + sw * 0.15
         w = max(sw * 0.7, 0.8)
-        h = (_P3[1] - mid) * 0.82
+        h = (_P3[1] - mid) * 0.62
         if g:      # open: hollow bar below the line
             o.append(
                 f'<rect x="{x0:.1f}" y="{mid:.1f}" width="{w:.1f}" '
@@ -670,5 +679,21 @@ def terminal_svg(
             f'<rect x="{T_L}" y="{_P1[0] - 6:.0f}" width="1" '
             f'height="{_P3[1] - _P1[0] + 12:.0f}" fill="{C["ink"]}"/></g>'
         )
+    # Crosshair, drawn by script on pointer move. Empty and hidden until then, so
+    # the chart is complete without JavaScript.
+    o.append(
+        f'<g id="sf-cross" style="opacity:0">'
+        f'<line id="sf-cx" x1="0" y1="{_P1[0] - 6:.0f}" x2="0" '
+        f'y2="{_P3[1] + 2:.0f}" stroke="{C["ink"]}" stroke-width=".6" '
+        f'stroke-dasharray="2 3" opacity=".8"/>'
+        f'<line id="sf-cy" x1="{T_L}" y1="0" x2="{plot_r:.0f}" y2="0" '
+        f'stroke="{C["ink"]}" stroke-width=".6" stroke-dasharray="2 3" opacity=".8"/>'
+        f'<rect id="sf-cbox" x="{plot_r + 1:.0f}" y="0" width="{T_AXIS - 3:.0f}" '
+        f'height="12" fill="{C["ink"]}"/>'
+        f'<text id="sf-cval" x="{plot_r + 4:.0f}" y="0" '
+        f'font-family="\'IBM Plex Mono\',monospace" font-size="6.8" '
+        f'font-weight="600" fill="#0B0D11"></text>'
+        f'</g>'
+    )
     o.append("</svg>")
     return "".join(o)

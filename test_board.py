@@ -161,7 +161,7 @@ def test_page_is_dark_and_respects_reduced_motion(ds):
     with app.test_client() as c:
         html = c.get("/levels?symbol=SYNTH3X").data.decode()
     assert 'content="dark"' in html
-    assert "--paper:#0E1014" in html
+    assert "--paper:#0B0D11" in html
     # Animations must be defeasible; some people get sick from them.
     assert html.count("prefers-reduced-motion") >= 2
 
@@ -328,3 +328,68 @@ def test_dark_and_light_themes_leave_no_hardcoded_colours():
     for theme, forbidden in (("dark", "#FFFFFF"), ("light", "#12141A")):
         svg = annotated_session_svg(*ex, theme=theme)
         assert forbidden not in svg, f"{theme} leaked {forbidden}"
+
+
+# --- terminal density and pointer interaction ----------------------------
+
+def test_chart_is_not_a_card_on_the_page(ds):
+    """Background and chart must be one continuous surface.
+
+    A bordered panel with its own fill reads as a figure pasted into a document;
+    the reference is a terminal, where there is no seam.
+    """
+    from chart import terminal_svg
+    from chart import THEMES
+
+    assert THEMES["dark"]["paper"] == "none"
+    from app import app
+
+    with app.test_client() as c:
+        html = c.get("/levels?symbol=SYNTH3X").data.decode()
+    assert "--sheet:#0B0D11" in html and "--paper:#0B0D11" in html
+
+
+def test_pointer_readout_payload_is_emitted(ds):
+    """Bars go out as one JSON blob, not as attributes on 140 rects: one parse
+    beats 140 DOM lookups per pointer move."""
+    import json
+    import re
+
+    from app import app
+
+    with app.test_client() as c:
+        html = c.get("/levels?symbol=SYNTH3X").data.decode()
+    m = re.search(r'id="sf-bars">(.*?)</script>', html, re.S)
+    assert m, "pointer payload missing"
+    bars = json.loads(m.group(1))
+    assert len(bars) > 100
+    for k in ("o", "h", "l", "c", "t"):
+        assert k in bars[0]
+    assert all(b["h"] >= b["l"] for b in bars)
+
+
+def test_svg_carries_the_geometry_the_crosshair_needs(ds):
+    from app import app
+
+    with app.test_client() as c:
+        html = c.get("/levels?symbol=SYNTH3X").data.decode()
+    for attr in ("data-x0", "data-step", "data-top", "data-bot",
+                 "data-lo", "data-hi", "data-right", "data-deep"):
+        assert attr in html, attr
+    assert 'id="sf-cross"' in html
+
+
+def test_readout_row_and_pointer_hud_do_not_share_a_layer(ds):
+    """They overlapped in the first pass and both became unreadable.
+
+    The HUD was absolutely positioned over the SVG, so nothing moved inside the
+    SVG could separate them. It now has its own row above the chart.
+    """
+    from app import app
+
+    with app.test_client() as c:
+        html = c.get("/levels?symbol=SYNTH3X").data.decode()
+    assert 'class="hudrow"' in html
+    # The HUD must sit before the plate in document order, not inside it.
+    assert html.index('id="sf-hud"') < html.index('id="sf-plate"')
+    assert "position:absolute" not in html.split(".hudrow{")[1].split("}")[0]
