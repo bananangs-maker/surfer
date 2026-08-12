@@ -86,3 +86,104 @@ def test_every_page_serves_the_mark_and_a_favicon():
             assert "favicon.svg" in html, u
             assert "mark-glyph" in html, u
             assert "sf-load" in html, u
+
+
+# --- loading screen must cover the wait, not follow it -------------------
+
+def test_loading_screen_rises_on_navigation():
+    """The reason a purely client-side screen is not enough.
+
+    The server does its slow work BEFORE any HTML exists, so by the time the script
+    runs the wait is already over — the first version only flashed after loading
+    finished. Raising the overlay on navigation covers exactly that gap: the old
+    document stays on screen while the server computes.
+    """
+    html = loading_html()
+    assert 'document.addEventListener("submit"' in html
+    assert 'document.addEventListener("click"' in html
+    assert "hold()" in html
+    assert "계산 중" in html
+
+
+def test_loading_screen_releases_on_back_navigation():
+    """A cached restore keeps the old `stay` flag, and an overlay left up over a
+    perfectly good page is worse than no overlay."""
+    html = loading_html()
+    assert 'window.addEventListener("pageshow"' in html
+    assert 'window.addEventListener("popstate"' in html
+    assert "stay = false" in html
+
+
+def test_external_links_do_not_raise_the_screen():
+    html = loading_html()
+    assert "a.host !== location.host" in html
+    assert '_blank' in html
+
+
+# --- seigaiha ground ----------------------------------------------------
+
+def test_seigaiha_tiles_seamlessly():
+    """Two rows per tile give the half-offset brick lattice the motif needs; a
+    single row would show a visible seam every cell."""
+    from brand import seigaiha_bg
+
+    bg = seigaiha_bg(cell=46.0, rings=4)
+    assert 'patternUnits="userSpaceOnUse"' in bg
+    assert 'width="46" height="46"' in bg
+    # Arcs at two row offsets and three horizontal positions each.
+    import re
+
+    ys = {m for m in re.findall(r"A [\d.]+ [\d.]+ 0 0 1 [-\d.]+ ([\d.]+)", bg)}
+    assert len(ys) == 2, ys
+
+
+def test_seigaiha_stays_behind_and_out_of_the_way():
+    """A ground that competes with the chart is worse than none."""
+    from brand import seigaiha_bg
+
+    bg = seigaiha_bg()
+    assert "z-index:0" in bg
+    assert "pointer-events:none" in bg
+    assert 'aria-hidden="true"' in bg
+    opacity = float(bg.split("opacity:")[1].split(";")[0])
+    assert 0.02 <= opacity <= 0.12, opacity
+
+
+def test_seigaiha_drift_is_slow_and_defeasible():
+    from brand import seigaiha_bg
+
+    bg = seigaiha_bg()
+    assert "prefers-reduced-motion" in bg
+    seconds = float(bg.split("animation:sfSea ")[1].split("s ")[0])
+    assert seconds >= 60, "faster than a minute per cell reads as motion, not water"
+
+
+def test_every_page_has_the_ground():
+    from app import app
+
+    urls = ["/", "/levels?symbol=SYNTH3X", "/compare?symbol=SYNTH3X",
+            "/backtest?symbol=SYNTH3X", "/validate?symbol=SYNTH3X",
+            "/sweep?symbol=SYNTH3X&reset=1"]
+    with app.test_client() as c:
+        for u in urls:
+            assert "sf-seigaiha" in c.get(u).data.decode(), u
+
+
+# --- the measured series must not look like a resting order --------------
+
+def test_percentile_series_is_solid_and_static():
+    """sf-level carries a dashed stroke and a marching animation meant for ARMED
+    order levels. A moving dashed line reads as an order sitting in the market; the
+    ATR percentile is a measurement."""
+    from app import app
+
+    with app.test_client() as c:
+        html = c.get("/levels?symbol=SYNTH3X").data.decode()
+    import re
+
+    m = re.search(r"<polyline[^>]*>", html)
+    assert m, "percentile series missing"
+    assert 'class="sf-series"' in m.group(0)
+    assert "sf-level" not in m.group(0)
+    assert "stroke-dasharray" not in m.group(0)
+    assert ".sf-series{stroke-dasharray:none; animation:none}" in html

@@ -634,8 +634,12 @@ def terminal_svg(
     ]
     if len(pts) > 1:
         o.append(
+            # Own class, deliberately not sf-level: that class carries a dashed
+            # stroke and a marching animation meant for the ARMED order levels,
+            # and a moving dashed line reads as an order sitting in the market.
+            # This is a measured series, so it is solid and still.
             f'<polyline points="{" ".join(pts)}" fill="none" stroke="{C["ink"]}" '
-            f'stroke-width="1.1"{cls("sf-level", 820)}/>'
+            f'stroke-width="1.1" stroke-linejoin="round" class="sf-series"/>'
         )
 
     # ---- sub-panel: gate state, session by session -----------------------

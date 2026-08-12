@@ -20,7 +20,7 @@ from diagnostics import purchase_case, resolution_comparison
 from backtest import Costs, buy_and_hold, curve_metrics, run_backtest, verdict
 from backtest import _stats as _bt_stats
 import board as board_mod
-from brand import loading_html, mark_svg
+from brand import loading_html, mark_svg, seigaiha_bg
 from chart import annotated_session_svg, pick_example, terminal_svg
 from levels import (PlaceholderBreakout, PriorCloseVolatilityBreakout,
                     PullbackToPriorLow, StructuralExit, VolatilityRegimeGate,
@@ -36,7 +36,8 @@ app = Flask(__name__, template_folder=".")
 @app.context_processor
 def _brand():
     """Mark and loading screen available to every template."""
-    return {"sf_mark": mark_svg, "sf_loading": loading_html}
+    return {"sf_mark": mark_svg, "sf_loading": loading_html,
+            "sf_sea": seigaiha_bg}
 
 SYMBOLS = {
     "TQQQ": "ProShares UltraPro QQQ (3x Nasdaq-100)",

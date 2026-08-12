@@ -244,6 +244,8 @@
      as attached to something. Slow enough to sit below notice. */
   #sf-term .sf-level{stroke-dasharray:5 4}
   #sf-term .sf-level:nth-of-type(odd){animation:sfMarch 9s linear infinite}
+  /* Measured series: solid, still. Only resting ORDER levels march. */
+  #sf-term .sf-series{stroke-dasharray:none; animation:none}
   @keyframes sfMarch{to{stroke-dashoffset:-36}}
 
   @keyframes fadeUp{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
@@ -257,6 +259,7 @@
 </style>
 </head>
 <body>
+{{ sf_sea()|safe }}
 {{ sf_loading("SURFER-ENGINE-v1.0.0" + (" · " ~ symbol ~ " 60M" if symbol else ""))|safe }}
 <div class="sheet">
 

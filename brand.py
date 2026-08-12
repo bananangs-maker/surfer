@@ -183,12 +183,108 @@ def loading_html(subtitle: str = "", ink: str = "#E9E7E2",
 (function(){{
   var el = document.getElementById("sf-load");
   if (!el) return;
-  function done(){{ el.setAttribute("data-ready",""); }}
-  // The page is already rendered server-side; the screen covers the font swap and
-  // the chart's own entrance. Never hold it longer than the animation needs.
-  if (document.readyState === "complete") setTimeout(done, 1750);
-  else window.addEventListener("load", function(){{ setTimeout(done, 1750); }});
-  // Failsafe: a loading screen that outlives its request is a broken page.
-  setTimeout(done, 12000);
+  var stay = false;
+  function show(){{ el.removeAttribute("data-ready"); }}
+  function done(){{ if (!stay) el.setAttribute("data-ready",""); }}
+
+  // Entrance: the page arrives fully rendered, so this only covers the font swap
+  // and the chart's own entrance animation.
+  if (document.readyState === "complete") setTimeout(done, 1700);
+  else window.addEventListener("load", function(){{ setTimeout(done, 1700); }});
+  setTimeout(done, 12000);   // failsafe: a screen that outlives its request is a bug
+
+  // Departure: this is the part that matters. The server does the slow work BEFORE
+  // any HTML exists, so a purely client-side screen can never cover it - by the
+  // time the script runs, the wait is already over. Raising the screen on
+  // navigation instead covers exactly that gap: the old document stays on screen
+  // while the server computes, so the overlay stays visible until the new page
+  // paints.
+  function hold(){{
+    stay = true;
+    show();
+    var sub = el.querySelector(".sf-load-sub");
+    if (sub) sub.textContent = "계산 중 — 서버 응답을 기다립니다";
+  }}
+  document.addEventListener("submit", function(e){{
+    if (e.target && e.target.tagName === "FORM") hold();
+  }}, true);
+  document.addEventListener("click", function(e){{
+    var a = e.target && e.target.closest && e.target.closest("a[href]");
+    if (!a) return;
+    var href = a.getAttribute("href") || "";
+    if (href.charAt(0) === "#" || a.target === "_blank") return;
+    if (a.host && a.host !== location.host) return;
+    hold();
+  }}, true);
+  // Browsers restore a cached page on Back; the overlay must not be stuck up.
+  // Always release on pageshow, not only when the page came from cache. Back
+  // navigation that re-renders still runs this script fresh, but a cached restore
+  // keeps the old `stay` flag - and an overlay left up over a perfectly good page
+  // is worse than no overlay at all.
+  window.addEventListener("pageshow", function(){{
+    stay = false;
+    setTimeout(function(){{ el.setAttribute("data-ready",""); }}, 400);
+  }});
+  // Same for a cancelled navigation: the browser fires this when it comes back.
+  window.addEventListener("popstate", function(){{
+    stay = false; el.setAttribute("data-ready","");
+  }});
 }})();
 </script>"""
+
+def seigaiha_bg(
+    ink: str = "#E9E7E2",
+    opacity: float = 0.085,
+    cell: float = 46.0,
+    rings: int = 4,
+    drift_seconds: float = 90.0,
+) -> str:
+    """Full-bleed seigaiha (青海波) ground.
+
+    The traditional construction: circles of radius w/2 on a half-offset brick
+    lattice, each drawn as concentric arcs, so the overlaps read as scales of
+    water. Two rows per tile supply the offset and the tile then repeats seamlessly.
+
+    Held at ~5% opacity and pinned behind everything. A ground that competes with
+    the chart is worse than none: the point of the terminal layout is that the
+    candles and the level lines are the only things asserting anything. The drift is
+    one cell per 90 seconds - slow enough to register as the surface being alive
+    rather than as motion.
+    """
+    r = cell / 2.0
+    h = cell / 2.0
+    step = r / rings
+    arcs = []
+    for row_y in (0.0, h):
+        offset = 0.0 if row_y == 0.0 else r
+        for cx in (offset - cell, offset, offset + cell):
+            for k in range(rings):
+                rr = r - k * step
+                if rr <= 0.6:
+                    continue
+                arcs.append(
+                    f'<path d="M {cx - rr:.2f} {row_y + h:.2f} '
+                    f'A {rr:.2f} {rr:.2f} 0 0 1 {cx + rr:.2f} {row_y + h:.2f}" '
+                    f'fill="none" stroke="{ink}" stroke-width="1"/>'
+                )
+    body = "".join(arcs)
+    return f"""<div class="sf-sea" aria-hidden="true"><svg width="100%" height="100%"
+  xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+  <defs><pattern id="sf-seigaiha" width="{cell:.0f}" height="{cell:.0f}"
+      patternUnits="userSpaceOnUse">{body}</pattern></defs>
+  <rect width="100%" height="100%" fill="url(#sf-seigaiha)"/>
+</svg></div>
+<style>
+  .sf-sea{{
+    position:fixed; inset:-{cell:.0f}px -{cell:.0f}px; z-index:0; pointer-events:none;
+    opacity:{opacity}; color:{ink};
+    animation:sfSea {drift_seconds:.0f}s linear infinite;
+  }}
+  .sf-sea svg{{display:block; width:100%; height:100%}}
+  @keyframes sfSea{{
+    from{{transform:translate3d(0,0,0)}}
+    to{{transform:translate3d(0,{cell:.0f}px,0)}}
+  }}
+  .sheet,.wrap,.sf-load{{position:relative; z-index:1}}
+  @media (prefers-reduced-motion:reduce){{ .sf-sea{{animation:none}} }}
+</style>"""

@@ -100,7 +100,7 @@ windows.py        mechanical lock on the validation window
 app.py            web viewer: / diagnostic, /levels, /compare, /backtest
 report_template.html, backtest.html, levels_board.html, compare.html
 run_diagnostic.py CLI
-test_*.py         142 tests
+test_*.py         150 tests
 SURFER-DES-001.md pre-registration, use 1 (ON HOLD)
 SURFER-DES-002.md pre-registration, use 2 (ACTIVE)
 ```
@@ -388,3 +388,32 @@ buy-and-hold, against a requirement of 0.50.
 256 cells cannot finish inside one request on a 0.1-CPU instance, so the route
 computes 14 per request and resumes on refresh. Crude, but it needs no task queue
 and the partial distribution is already informative.
+
+
+## The ground, and what the loading screen is actually for
+
+A seigaiha (青海波) pattern runs behind every page — concentric arcs on a
+half-offset lattice, the traditional water motif, drifting one cell per 90 seconds.
+Held at 8.5% opacity, `pointer-events:none`, `aria-hidden`, `z-index:0`. A ground
+that competes with the chart is worse than none: the point of the terminal layout is
+that the candles and the level lines are the only things asserting anything.
+
+### Why the loading screen had to change
+
+The first version only flashed *after* loading finished, which is the opposite of
+useful. The reason is structural: the server does its slow work **before any HTML
+exists**, so by the time a client-side script runs, the wait is already over.
+
+The fix is to raise the overlay **on navigation** — on form submit and on internal
+link clicks. The old document stays on screen while the server computes, so the
+overlay is visible for exactly the interval that was previously blank. It releases
+on `pageshow` and `popstate` unconditionally, not only on a cached restore: an
+overlay left up over a perfectly good page is worse than no overlay, and a cached
+restore keeps the old flag.
+
+### The percentile series is not a resting order
+
+`sf-level` carries a dashed stroke and a slow marching animation, which is right for
+an **armed order** sitting in the market. The ATR percentile is a measurement, so it
+uses its own class and is solid and still. A moving dashed line there would assert
+something false about what the system is doing.
