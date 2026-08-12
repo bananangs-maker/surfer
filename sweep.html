@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>SURFER · 견고성 스윕{% if symbol %} · {{ symbol }}{% endif %}</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#0B0D11;--ink:#E9E7E2;--dim:#7E8189;
+    --hair:rgba(233,231,226,.16);--hair-soft:rgba(233,231,226,.07);
+    --ease:cubic-bezier(.22,.7,.24,1)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:'Barlow',system-ui,sans-serif;font-size:15px;line-height:1.55}
+  .sheet{max-width:1120px;margin:0 auto;padding:14px 14px 40px}
+  .head{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    flex-wrap:wrap;margin-bottom:2px}
+  .mark{display:inline-flex;align-items:center;font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;font-size:23px;letter-spacing:.18em;text-transform:uppercase;margin:0}
+  .mark-glyph{display:inline-block;line-height:0;margin-right:8px;vertical-align:-2px;
+    transition:transform .5s var(--ease)}
+  .mark:hover .mark-glyph{transform:rotate(120deg)}
+  .tf{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--dim)}
+  .sub{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);margin:0 0 10px}
+  .warn{border-left:2px solid var(--ink);padding:8px 0 8px 12px;margin-bottom:12px}
+  .warn p{margin:0 0 6px;font-size:12.5px} .warn p:last-child{margin:0}
+  .quiet{color:var(--dim);font-style:italic}
+  .bar{height:2px;background:var(--hair-soft);margin:8px 0 4px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--ink);transition:width .5s var(--ease)}
+  .prog{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--dim)}
+  h2{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:14px;
+    letter-spacing:.04em;text-transform:uppercase;margin:16px 0 8px;
+    border-bottom:1px solid var(--hair);padding-bottom:5px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:5px 9px;border-bottom:1px solid var(--hair-soft);text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+    border-bottom:1px solid var(--hair)}
+  td.num{font-family:'IBM Plex Mono',monospace}
+  tbody tr{transition:background .2s var(--ease)}
+  tbody tr:hover{background:rgba(233,231,226,.04)}
+  .big{font-family:'IBM Plex Mono',monospace;font-weight:600;
+    font-size:clamp(22px,3.4vw,30px)}
+  .chip{font-family:'Barlow Condensed',sans-serif;font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;border:1.4px solid var(--ink);padding:2px 8px;white-space:nowrap}
+  .chip-solid{background:var(--ink);color:var(--paper)}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+  a,button{color:var(--ink)}
+  a{text-decoration:none;border-bottom:1px solid var(--hair)}
+  button{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13px;
+    letter-spacing:.14em;text-transform:uppercase;padding:8px 18px;
+    border:1.5px solid var(--ink);background:transparent;cursor:pointer;border-radius:0;
+    transition:background .2s var(--ease),color .2s var(--ease)}
+  button:hover{background:var(--ink);color:var(--paper)}
+  select{font-family:'IBM Plex Mono',monospace;font-size:13px;padding:7px 10px;
+    border:1px solid var(--hair);background:var(--paper);color:var(--ink);border-radius:0}
+  pre{font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--paper);
+    border:1px solid var(--hair);padding:9px;margin:0;white-space:pre-wrap}
+  .foot{margin-top:16px;font-family:'Barlow Condensed',sans-serif;font-size:9.5px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+{{ sf_loading('견고성 스윕 · ' ~ symbol)|safe }}
+<div class="sheet">
+  <div class="head">
+    <h1 class="mark"><span class="mark-glyph">{{ sf_mark(20, "currentColor")|safe }}</span>Surfer</h1>
+    <span class="tf">Robustness Sweep · DES-002 §15</span>
+  </div>
+  <p class="sub">{{ symbol }} · 256조합 · 이웃최솟값 선택</p>
+
+  <div class="warn">
+    <p><strong>최적화가 아닙니다.</strong> 격자의 최댓값은 표본 외 데이터가 없는 상태에서
+    증거가 아닙니다 — 256조합이면 무엇이든 통과하고, 규칙이 옳아서인지 조합이 많아서인지
+    같은 표본으로는 구분되지 않습니다.</p>
+    <p class="quiet">선택 통계는 §15.3에서 결과를 보기 전에 고정했습니다:
+    <strong>이웃최솟값 칼마</strong> — 자신과 격자 이웃 중 최악의 점수. 최댓값 선택은
+    잡음을 고르고, 이웃최솟값 선택은 파라미터가 조금 틀려도 버티는 영역을 고릅니다.</p>
+  </div>
+
+  {% if error %}
+  <div class="warn"><p><strong>{{ error }}</strong></p>{% if trace %}<pre>{{ trace }}</pre>{% endif %}</div>
+  {% elif a and a.n %}
+
+  <div class="bar"><i style="width:{{ (100 * a.n / a.total)|round(1) }}%"></i></div>
+  <div class="prog">{{ a.n }} / {{ a.total }} 조합
+    {% if remaining %}· 남은 {{ remaining }}개 — 새로고침하면 이어서 계산합니다
+    (요청당 {{ per_req }}개){% else %}· 완료{% endif %}</div>
+
+  <h2>1 · 통과율 — 격자에 견고한 영역이 있는가</h2>
+  <div class="row">
+    <span class="big">{{ '%.1f'|format(a.pass_rate*100) }}%</span>
+    <span class="chip {{ '' if a.pass_rate >= 0.05 else 'chip-solid' }}">
+      {{ '하한 5% 충족' if a.pass_rate >= 0.05 else '하한 5% 미달' }}</span>
+    <span class="quiet">§2.3(낙폭이 바이앤홀드의 50% 이하)을 만족하는 조합의 비율</span>
+  </div>
+  <p class="quiet" style="font-size:12px">0%면 탐색을 더 해도 소용없습니다 ·
+    40% 이상이면 견고 · 5% 미만이면 그 “승자”는 잡음입니다</p>
+
+  <h2>2 · 분포 — 최댓값은 참고만</h2>
+  <table>
+    <thead><tr><th>지표</th><th>min</th><th>Q1</th><th>중위</th><th>Q3</th><th>max</th></tr></thead>
+    <tbody>
+      <tr><td>칼마</td>{% for v in a.calmar_q %}<td class="num">{{ '%.2f'|format(v) }}</td>{% endfor %}</tr>
+      <tr><td>낙폭비 (서퍼/기준선)</td>{% for v in a.ratio_q %}<td class="num">{{ '%.2f'|format(v) }}</td>{% endfor %}</tr>
+    </tbody>
+  </table>
+  <p class="quiet" style="font-size:12px">기준선 바이앤홀드: 칼마
+    {{ '%.2f'|format(a.bh_calmar) }} · 낙폭 {{ '%.1f'|format(a.bh_mdd*100) }}%
+    · 낙폭비 0.50 이하가 §2.3 통과선</p>
+
+  <h2>3 · 축별 기여 — 어느 파라미터가 결과를 움직이는가</h2>
+  <table>
+    <thead><tr><th>파라미터</th><th colspan="4">값별 칼마 중위</th></tr></thead>
+    <tbody>
+      {% for ax, d in a.axis_medians.items() %}
+      <tr><td>{{ ax }}</td>
+        {% for k, v in d.items() %}<td class="num">{{ k }}: {{ '%+.2f'|format(v) if v is not none else '—' }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="quiet" style="font-size:12px">한 축의 값들 사이에 차이가 없으면 그 파라미터는
+    결과를 설명하지 않습니다 — 조정해도 의미가 없다는 뜻입니다</p>
+
+  <h2>4 · 이웃최솟값 상위 — 선택 후보</h2>
+  <div class="row">
+    <span class="chip {{ '' if a.verdict.selectable else 'chip-solid' }}">
+      {{ '선택 가능' if a.verdict.selectable else '선택 불가' }}</span>
+    <span class="quiet">{{ a.verdict.reason }}</span>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>trigger</th><th>stop</th><th>gate</th><th>exit_buf</th>
+      <th>이웃최솟값</th><th>이웃범위</th><th>자기 칼마</th><th>낙폭</th><th>낙폭비</th>
+      <th>거래</th><th>노출</th><th>모호</th></tr></thead>
+    <tbody>
+      {% for s in a.ranked %}
+      <tr>
+        <td class="num">{{ loop.index }}</td>
+        <td class="num">{{ s.cell.params.trigger }}</td>
+        <td class="num">{{ s.cell.params.stop }}</td>
+        <td class="num">{{ '없음' if s.cell.params.gate_pct > 100 else s.cell.params.gate_pct|int }}</td>
+        <td class="num">{{ s.cell.params.exit_buf }}</td>
+        <td class="num">{{ '%.3f'|format(s.worst_neighbour_calmar) }}</td>
+        <td class="num">{{ '%.3f'|format(s.neighbour_range) }}</td>
+        <td class="num">{{ '%.2f'|format(s.cell.calmar) }}</td>
+        <td class="num">{{ '%.1f'|format(s.cell.mdd*100) }}%</td>
+        <td class="num">{{ '%.2f'|format(s.cell.mdd_ratio) }}</td>
+        <td class="num">{{ s.cell.trades }}</td>
+        <td class="num">{{ '%.0f'|format(s.cell.exposure*100) }}%</td>
+        <td class="num">{{ '%.0f'|format(s.cell.ambiguous*100) }}%</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="quiet" style="font-size:12px">
+    <strong>이것은 표본 내입니다.</strong> 이웃최솟값 선택은 분산을 줄이지만 표본 내
+    문제를 없애지 못합니다. 선택된 조합은 2018Q4·2020·2022에서 §2.2R을 통과해야 하며,
+    그때까지 “덜 취약해 보이는 후보”이지 검증된 엔진이 아닙니다 (§15.5).
+  </p>
+
+  {% endif %}
+
+  <form method="get" action="/sweep" class="row" style="margin-top:14px">
+    <select name="symbol">
+      {% for s in symbols %}<option value="{{ s }}" {% if s==symbol %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+    <button type="submit">계속 계산</button>
+    <button type="submit" name="reset" value="1">처음부터</button>
+  </form>
+
+  <p class="foot"><a href="/levels">신호</a> · <a href="/compare">후보 비교</a> ·
+    <a href="/validate">§2.2R</a> · <a href="/">진단</a></p>
+</div>
+</body>
+</html>

@@ -314,6 +314,59 @@ def validate_view():
     return render_template("validate.html", **ctx)
 
 
+# Sweep state lives per process. 256 combinations cannot finish inside one request
+# on a 0.1-CPU instance, so each request computes a slice and the page reports
+# progress. Refreshing continues where it stopped - crude, but it works on a free
+# tier without a task queue, and the partial distribution is already informative.
+_SWEEP: dict = {}
+SWEEP_PER_REQUEST = 14
+
+
+@app.route("/sweep")
+def sweep_view():
+    """Robustness sweep (DES-002 §15). Distribution first, selection last."""
+    import sweep as SW
+
+    symbol = request.args.get("symbol", "SYNTH3X").upper()
+    if symbol not in SYMBOLS:
+        symbol = "SYNTH3X"
+    ctx = {"symbols": SYMBOLS, "symbol": symbol, "a": None, "error": None,
+           "grid": SW.GRID, "axes": SW.AXES, "fixed": SW.FIXED,
+           "per_req": SWEEP_PER_REQUEST}
+    try:
+        ds, _age = get_dataset(symbol)
+        if request.args.get("reset"):
+            _SWEEP.pop(symbol, None)
+        st = _SWEEP.get(symbol)
+        if st is None:
+            bh = buy_and_hold(ds, costs=Costs())
+            bm = curve_metrics(bh)
+            st = {
+                "res": SW.SweepResult(bh_calmar=bm["calmar"],
+                                      bh_mdd=bm["max_drawdown"],
+                                      total=len(SW.combos())),
+                "queue": SW.combos(), "bh": bh, "bh_mdd": bm["max_drawdown"],
+            }
+            _SWEEP[symbol] = st
+
+        for _ in range(SWEEP_PER_REQUEST):
+            if not st["queue"]:
+                break
+            st["res"].cells.append(
+                SW.run_one(ds, st["queue"].pop(0), st["bh"], st["bh_mdd"])
+            )
+        ctx["res"] = st["res"]
+        ctx["remaining"] = len(st["queue"])
+        ctx["a"] = SW.analyse(st["res"])
+    except RateLimited as e:
+        ctx["error"] = str(e)
+    except Exception as e:
+        import traceback
+        ctx["error"] = f"{type(e).__name__}: {e}"
+        ctx["trace"] = traceback.format_exc()
+    return render_template("sweep.html", **ctx)
+
+
 @app.route("/compare")
 def compare_view():
     """All four candidates, one run, DES-002 §6 applied to each.

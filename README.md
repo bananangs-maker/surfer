@@ -100,7 +100,7 @@ windows.py        mechanical lock on the validation window
 app.py            web viewer: / diagnostic, /levels, /compare, /backtest
 report_template.html, backtest.html, levels_board.html, compare.html
 run_diagnostic.py CLI
-test_*.py         125 tests
+test_*.py         142 tests
 SURFER-DES-001.md pre-registration, use 1 (ON HOLD)
 SURFER-DES-002.md pre-registration, use 2 (ACTIVE)
 ```
@@ -356,3 +356,35 @@ attempt.
 
 This is one more reason the purchased history matters beyond §2.2R: FirstRate is a
 file, so none of this applies to it.
+
+
+## Robustness sweep — `/sweep`
+
+256 parameter combinations, and **the maximum is deliberately not the answer.**
+With no out-of-sample data left, the best cell of a large grid carries no
+information: something always passes, and whether it passed because the rule is
+right or because the grid was large cannot be told from the same sample.
+
+The selection statistic was fixed in DES-002 §15.3 before any result was seen:
+
+    worst-of-neighbourhood Calmar
+
+A cell scores as the worst of itself and its immediate grid neighbours. Picking the
+maximum picks noise; picking worst-of-neighbourhood picks a region that survives a
+slightly wrong parameter — which is the property live use actually needs, since
+nothing guarantees the parameters are right.
+
+Reported in order: **pass rate first** (is there a robust region at all — 0% means
+more searching cannot help, under 5% means any winner is noise), then the
+distribution, then per-axis medians (an axis whose values barely differ does not
+explain the result and tuning it is pointless), and only then the ranked
+candidates. `no gate` sits in the grid as a point, so the gate's contribution shows
+up inside the distribution rather than being assumed.
+
+On the synthetic fixture the pass rate is **0.0%** and selection is blocked. The
+best drawdown ratio across all 256 cells is 0.95 — barely shallower than
+buy-and-hold, against a requirement of 0.50.
+
+256 cells cannot finish inside one request on a 0.1-CPU instance, so the route
+computes 14 per request and resumes on refresh. Crude, but it needs no task queue
+and the partial distribution is already informative.
