@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta name="color-scheme" content="dark">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -237,14 +238,19 @@
   pre{font-size:10.5px!important; padding:9px!important}
   .foot{margin-top:12px!important; font-size:9.5px!important}
   p{margin:0 0 7px}
+  .mark{display:inline-flex; align-items:center}
+  .mark-glyph{display:inline-block; line-height:0; margin-right:8px; vertical-align:-2px;
+    transition:transform .5s cubic-bezier(.22,.7,.24,1)}
+  .mark:hover .mark-glyph{transform:rotate(120deg)}
 </style>
 </head>
 <body>
+{{ sf_loading('SURFER' + (' · ' ~ symbol if symbol else ''))|safe }}
 <div class="wrap">
 
   <header class="cartouche">
     <div class="cartouche-top">
-      <span class="mark">Surfer</span>
+      <span class="mark"><span class="mark-glyph">{{ sf_mark(20, "currentColor")|safe }}</span>Surfer</span>
       <span class="mark-sub">Sounding Report · Diag-001</span>
     </div>
     <div class="cartouche-grid">

@@ -20,6 +20,7 @@ from diagnostics import purchase_case, resolution_comparison
 from backtest import Costs, buy_and_hold, curve_metrics, run_backtest, verdict
 from backtest import _stats as _bt_stats
 import board as board_mod
+from brand import loading_html, mark_svg
 from chart import annotated_session_svg, pick_example, terminal_svg
 from levels import (PlaceholderBreakout, PriorCloseVolatilityBreakout,
                     PullbackToPriorLow, StructuralExit, VolatilityRegimeGate,
@@ -30,6 +31,12 @@ from schema import Dataset
 
 # template_folder="." keeps the HTML at the repo root - no subfolders anywhere.
 app = Flask(__name__, template_folder=".")
+
+
+@app.context_processor
+def _brand():
+    """Mark and loading screen available to every template."""
+    return {"sf_mark": mark_svg, "sf_loading": loading_html}
 
 SYMBOLS = {
     "TQQQ": "ProShares UltraPro QQQ (3x Nasdaq-100)",
@@ -410,6 +417,16 @@ def levels_view():
         ctx["error"] = f"{type(e).__name__}: {e}"
         ctx["trace"] = traceback.format_exc()
     return render_template("levels_board.html", **ctx)
+
+
+@app.route("/favicon.svg")
+def favicon():
+    """Compact cut: three nested arcs per fan turn to mush below ~32px."""
+    return app.response_class(
+        mark_svg(32, ink="#E9E7E2", detail="compact"),
+        mimetype="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.route("/healthz")

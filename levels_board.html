@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>SURFER{% if symbol %} · {{ symbol }}{% endif %}</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -36,7 +37,13 @@
     gap:10px; flex-wrap:wrap; margin-bottom:2px;
     animation:fadeUp .5s var(--ease) both;
   }
+  .mark-glyph{
+    display:inline-block; vertical-align:-3px; margin-right:9px; line-height:0;
+    transition:transform .5s var(--ease);
+  }
+  .mark:hover .mark-glyph{transform:rotate(120deg)}
   .mark{
+    display:flex; align-items:center;
     font-family:'Barlow Condensed',sans-serif; font-weight:700;
     font-size:clamp(17px,2.6vw,23px); letter-spacing:.18em;
     text-transform:uppercase; line-height:1; margin:0;
@@ -250,10 +257,11 @@
 </style>
 </head>
 <body>
+{{ sf_loading("SURFER-ENGINE-v1.0.0" + (" · " ~ symbol ~ " 60M" if symbol else ""))|safe }}
 <div class="sheet">
 
   <div class="head">
-    <h1 class="mark">Surfer</h1>
+    <h1 class="mark"><span class="mark-glyph">{{ sf_mark(22, "currentColor")|safe }}</span>Surfer</h1>
     <span class="tf">Time Frame | 60M</span>
   </div>
   <p class="sub">
