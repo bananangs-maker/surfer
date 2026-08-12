@@ -100,7 +100,7 @@ windows.py        mechanical lock on the validation window
 app.py            web viewer: / diagnostic, /levels, /compare, /backtest
 report_template.html, backtest.html, levels_board.html, compare.html
 run_diagnostic.py CLI
-test_*.py         105 tests
+test_*.py         121 tests
 SURFER-DES-001.md pre-registration, use 1 (ON HOLD)
 SURFER-DES-002.md pre-registration, use 2 (ACTIVE)
 ```
@@ -204,11 +204,36 @@ symbol picker, navigation. The value of the screen is that one glance answers
 "what do I place today", and each panel above the fold erodes that. A test pins
 it: at least five folded sections, none open by default.
 
-Motion is sequenced to be read in the order the system works — closed sessions,
-then levels, then the armed session. Candles rise into place staggered, level
-hairlines fade in, right-rail boxes settle last, and the ambiguous-bar highlight
-breathes. All of it collapses under `prefers-reduced-motion`, asserted by test in
-both the page CSS and the generated SVG.
+### Motion
+
+Sequenced to be read in the order the system works — closed sessions, then the
+levels derived from them, then the session being armed.
+
+In the SVG: the entry band wipes in, candle wicks grow from their centres and
+bodies rise behind them staggered 24ms apart, the session divider draws downward,
+level hairlines wipe left to right, leader lines fade, right-rail price boxes
+settle, numbered markers pop, and a single scan line crosses once. The
+ambiguous-bar hatch drifts continuously and its highlight breathes.
+
+On the page: prices count up and land on the **exact** rendered string rather than
+a rounded reconstruction — a price that settled one tick off the truth would be
+worse than no animation. Folded sections reveal on scroll via
+IntersectionObserver. The badge takes one slow shimmer pass so the state reads as
+current rather than as a screenshot. Rail cells, table rows, legend items and
+summaries all have hover feedback whose only job is answering "did that
+register?".
+
+One thing is genuinely live rather than a snapshot: the staleness clock ticks
+every 30 seconds, so an old tab cannot pass for a fresh one.
+
+**All of it is defeasible.** `prefers-reduced-motion` collapses every animation,
+transition, reveal and count-up to its final state — verified in a real browser at
+120ms, not merely asserted in CSS. Sustained motion is genuinely sickening for
+people with vestibular disorders, and this screen is meant to be opened every
+morning. Tests assert the media query is present on all six pages, that every
+declared SVG animation class is actually attached to an element (two were
+declared and never applied), and that `animate=False` strips the keyframes
+entirely.
 
 `chart.py` draws real bars with a real `LevelSet` on them, generated from the
 same data the diagnostic counts, so the illustration cannot drift from the
@@ -296,3 +321,28 @@ its boundary reversed: candidate D was chosen on 2024-08 onward, so everything
 before that is untouched and is genuine out-of-sample. The cost of the repeal
 turned out to be nothing — but only because the choice happened to be made on the
 recent end.
+
+
+## Data fetching
+
+Yahoo rate-limits. A live `YFRateLimitError` on 2026-08-12 traced to a 30-minute
+cache TTL on a system that decides **once per day** — the bars do not change
+between two loads on the same morning, but every expiry sent another request, and
+four pages opened a few times tripped the limiter.
+
+    TTL          6 hours
+    on refusal   retry twice with backoff (the limiter is per-window)
+    then         serve the cached copy however old, and report its age
+    beyond 72h   refuse rather than mislead
+
+**A stale dataset beats no dataset.** Yesterday's levels are wrong but legible; a
+traceback is neither. The page shows the cache age next to the staleness clock so
+the compromise is visible rather than silent.
+
+An unrelated failure is **not** relabelled as a rate limit. A delisted ticker
+shown as "wait a few minutes" would bury its own cause, so only errors that
+actually look like limits are retried; everything else propagates on the first
+attempt.
+
+This is one more reason the purchased history matters beyond §2.2R: FirstRate is a
+file, so none of this applies to it.

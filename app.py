@@ -39,23 +39,74 @@ SYMBOLS = {
 }
 
 _CACHE: dict[str, tuple[float, Dataset]] = {}
-CACHE_TTL = 60 * 30
+
+# Six hours, not thirty minutes. A 30-minute TTL was incoherent with a system
+# that decides ONCE PER DAY: the bars do not change between two loads on the same
+# morning, but every expiry sent another request to Yahoo. Opening four pages a
+# few times was enough to hit YFRateLimitError.
+CACHE_TTL = 60 * 60 * 6
+
+# A stale dataset beats no dataset. When a refetch is rate-limited, serve the
+# cached copy however old it is and say so, rather than showing a traceback:
+# yesterday's levels are wrong but legible, an error page is neither.
+_STALE_KEEP = 60 * 60 * 72
 
 
-def get_dataset(symbol: str) -> Dataset:
-    hit = _CACHE.get(symbol)
-    if hit and time.time() - hit[0] < CACHE_TTL:
-        return hit[1]
+class RateLimited(RuntimeError):
+    pass
 
+
+def _fetch(symbol: str) -> Dataset:
     if symbol == "SYNTH3X":
         from loaders import load_synthetic
-        ds = load_synthetic(n_sessions=400)
-    else:
-        from loaders import load_yfinance
-        ds = load_yfinance(symbol)
+        return load_synthetic(n_sessions=400)
+    from loaders import load_yfinance
+    return load_yfinance(symbol)
 
-    _CACHE[symbol] = (time.time(), ds)
-    return ds
+
+def get_dataset(symbol: str) -> tuple[Dataset, float]:
+    """Return (dataset, age_seconds). Raises RateLimited only if nothing cached.
+
+    Retries with a short backoff: Yahoo's limiter is per-window, so a second
+    attempt a moment later often succeeds where an immediate one does not.
+    """
+    hit = _CACHE.get(symbol)
+    now = time.time()
+    if hit and now - hit[0] < CACHE_TTL:
+        return hit[1], now - hit[0]
+
+    last_err: Exception | None = None
+    was_rate_limit = False
+    for pause in (0.0, 1.5, 4.0):
+        if pause:
+            time.sleep(pause)
+        try:
+            ds = _fetch(symbol)
+            _CACHE[symbol] = (time.time(), ds)
+            return ds, 0.0
+        except Exception as e:                      # noqa: BLE001
+            last_err = e
+            was_rate_limit = (
+                "ratelimit" in type(e).__name__.lower()
+                or "too many" in str(e).lower()
+            )
+            if not was_rate_limit:
+                break
+
+    if hit and now - hit[0] < _STALE_KEEP:
+        return hit[1], now - hit[0]
+    if not was_rate_limit:
+        # Do not relabel an unrelated failure as a rate limit: a delisted ticker
+        # or a schema change would then be shown as "wait a few minutes", and the
+        # real cause would never surface.
+        raise last_err
+    raise RateLimited(
+        f"{symbol} 데이터를 받아올 수 없고 캐시도 없습니다.\n"
+        f"야후가 호출 빈도를 제한했습니다 ({type(last_err).__name__}). "
+        "몇 분 뒤 다시 시도해 주세요.\n"
+        "이 화면은 하루 한 번만 열면 충분한 시스템이며, 반복 새로고침이 "
+        "제한을 부릅니다."
+    ) from last_err
 
 
 @app.route("/")
@@ -91,7 +142,8 @@ def index():
     ctx["ran"] = True
     try:
         t0 = time.time()
-        ds = get_dataset(symbol)
+        ds, ds_age = get_dataset(symbol)
+        ctx["ds_age_h"] = ds_age / 3600.0
         rep = integrity.check(ds.bars, ds.interval_minutes)
         hist = [ds.session(s) for s in ds.sessions]
         stub = stub_range_ratio(hist)
@@ -165,7 +217,8 @@ def backtest_view():
     ctx = {"symbols": SYMBOLS, "symbol": symbol, "candidates": CANDIDATES,
            "candidate": cand, "blocked": None, "unlock": Unlock.load()}
     try:
-        ds = get_dataset(symbol)
+        ds, ds_age = get_dataset(symbol)
+        ctx["ds_age_h"] = ds_age / 3600.0
         ctx["windows"] = describe_windows(ds)
 
         # The lock restricts the WINDOW, not the symbol. While locked, a real
@@ -228,7 +281,8 @@ def validate_view():
         from windows import (MIN_SESSIONS_FOR_ENGINE, WindowLocked,
                              describe_windows, validation_slice)
 
-        ds = get_dataset(symbol)
+        ds, ds_age = get_dataset(symbol)
+        ctx["ds_age_h"] = ds_age / 3600.0
         ctx["windows"] = describe_windows(ds)
         from regimes import Regime
         ctx["REG"] = Regime
@@ -269,7 +323,8 @@ def compare_view():
     ctx = {"symbols": SYMBOLS, "symbol": symbol, "rows": [], "error": None,
            "repeal_note": REPEAL_NOTE if SPLIT_REPEALED else None, "bh": None}
     try:
-        ds = get_dataset(symbol)
+        ds, ds_age = get_dataset(symbol)
+        ctx["ds_age_h"] = ds_age / 3600.0
         bh = buy_and_hold(ds, costs=Costs())
         ctx["bh"] = curve_metrics(bh)
         ctx["windows"] = describe_windows(ds)
@@ -311,9 +366,11 @@ def levels_view():
     if symbol not in SYMBOLS:
         symbol = "SYNTH3X"
     ctx = {"symbols": SYMBOLS, "symbol": symbol, "board": None, "sig": None,
-           "worksheet": "", "error": None, "chart_svg": None}
+           "worksheet": "", "error": None, "chart_svg": None,
+           "rate_limited": None, "ds_age_h": 0.0}
     try:
-        ds = get_dataset(symbol)
+        ds, ds_age = get_dataset(symbol)
+        ctx["ds_age_h"] = ds_age / 3600.0
         bd = board_mod.build_engine(ds, symbol)
         ctx["board"] = bd
         ctx["sig"] = bd.signal
@@ -336,6 +393,8 @@ def levels_view():
                 bd.signal.atr_percentile, theme="dark", animate=True,
             )
             ctx["series"] = series
+    except RateLimited as e:
+        ctx["rate_limited"] = str(e)
     except Exception as e:
         import traceback
         ctx["error"] = f"{type(e).__name__}: {e}"

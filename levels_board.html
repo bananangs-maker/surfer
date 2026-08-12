@@ -221,10 +221,23 @@
   </div>
   <p class="sub">
     {{ symbol }}{% if board %} · {{ board.last_complete }} 종료 · {{ sig.session }} 적용
-    · <span data-since="{{ '%.4f'|format(board.staleness_hours) }}">{{ '%.1f'|format(board.staleness_hours) }}h</span>{% endif %}
+    · <span data-since="{{ '%.4f'|format(board.staleness_hours) }}">{{ '%.1f'|format(board.staleness_hours) }}h</span>
+    {% if ds_age_h and ds_age_h > 0.05 %} · 캐시 {{ '%.1f'|format(ds_age_h) }}h{% endif %}{% endif %}
   </p>
 
-  {% if error %}
+  {% if rate_limited %}
+  <div class="state">
+    <span class="badge on">Rate Limited</span>
+    <span class="state-text">야후가 호출 빈도를 제한했습니다</span>
+  </div>
+  <div class="warn" style="margin-bottom:26px">
+    <p style="white-space:pre-line">{{ rate_limited }}</p>
+    <p class="quiet">코드 문제가 아닙니다. 이 시스템은 하루 한 번 판단하므로
+    데이터를 6시간 캐시합니다 — 반복 새로고침이 제한을 부릅니다.</p>
+    <p class="quiet">FirstRate 데이터는 파일이므로 이 문제가 원천적으로 없습니다.</p>
+  </div>
+
+  {% elif error %}
   <div class="state">
     <span class="badge on">Error</span>
     <span class="state-text">{{ error }}</span>
