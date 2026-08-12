@@ -100,7 +100,7 @@ windows.py        mechanical lock on the validation window
 app.py            web viewer: / diagnostic, /levels, /compare, /backtest
 report_template.html, backtest.html, levels_board.html, compare.html
 run_diagnostic.py CLI
-test_*.py         103 tests
+test_*.py         105 tests
 SURFER-DES-001.md pre-registration, use 1 (ON HOLD)
 SURFER-DES-002.md pre-registration, use 2 (ACTIVE)
 ```
@@ -187,11 +187,28 @@ between the two settings.
 
 ## Visual language
 
-Monochrome, after a chart-study reference: hairlines, shaded zones, boxed price
-labels on a right rail, numbered leader callouts. Direction is carried by fill
-(hollow up, solid down) and emphasis by stroke weight — never by hue, because a
-greyscale sheet cannot imply that one outcome is the good one. PASS is an
+Monochrome and dark, after a chart-study reference. Dark mode inverts the
+reference's tonal relationships rather than recolouring them: paper becomes
+near-black, ink becomes bone, zone greys sit between. **No hue is introduced** —
+a monochrome sheet cannot imply that one outcome is the good one. PASS is an
 outlined chip, FAIL a filled one.
+
+Direction is carried by fill (hollow up, solid down) and emphasis by stroke
+weight. In dark mode a bright filled candle reads as "up" to most people, which
+is the opposite of the convention, so the chart states `HOLLOW UP / SOLID DOWN`
+in its footer rather than leaving it to be guessed.
+
+`/levels` is chart-dominant: masthead, state badge, four prices, the chart. Every
+other panel is a collapsed `<details>` — engine spec, data status, worksheet,
+symbol picker, navigation. The value of the screen is that one glance answers
+"what do I place today", and each panel above the fold erodes that. A test pins
+it: at least five folded sections, none open by default.
+
+Motion is sequenced to be read in the order the system works — closed sessions,
+then levels, then the armed session. Candles rise into place staggered, level
+hairlines fade in, right-rail boxes settle last, and the ambiguous-bar highlight
+breathes. All of it collapses under `prefers-reduced-motion`, asserted by test in
+both the page CSS and the generated SVG.
 
 `chart.py` draws real bars with a real `LevelSet` on them, generated from the
 same data the diagnostic counts, so the illustration cannot drift from the

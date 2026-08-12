@@ -3,248 +3,360 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SURFER · 오늘의 레벨{% if symbol %} · {{ symbol }}{% endif %}</title>
+<meta name="color-scheme" content="dark">
+<title>SURFER{% if symbol %} · {{ symbol }}{% endif %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#EDEDEB; --panel:#FFFFFF; --ink:#111111;
-    --zone-1:#D9D9D7; --zone-2:#C4C4C2; --muted:#8A8A88;
-    --hair:rgba(17,17,17,.22); --hair-soft:rgba(17,17,17,.10);
+    /* The reference sheet is light. Dark mode inverts the tonal relationships
+       rather than recolouring them: paper becomes near-black, ink becomes bone,
+       zone greys sit between. No hue is introduced - a monochrome sheet cannot
+       imply that one outcome is the good one. */
+    --paper:#0E1014;
+    --sheet:#12141A;
+    --ink:#E9E7E2;
+    --dim:#8C8F98;
+    --hair:rgba(233,231,226,.16);
+    --hair-soft:rgba(233,231,226,.07);
+    --ease:cubic-bezier(.22,.7,.24,1);
   }
   *{box-sizing:border-box}
-  body{margin:0; background:var(--paper); color:var(--ink);
-    font-family:'Barlow',system-ui,sans-serif; font-size:16px; line-height:1.55}
-  .wrap{max-width:1080px; margin:0 auto; padding:32px 20px 96px}
-  .cartouche{border:1px solid var(--ink); background:var(--panel); padding:22px 24px; margin-bottom:24px}
-  .cartouche-top{display:flex; flex-wrap:wrap; gap:6px 18px; align-items:baseline;
-    border-bottom:1px solid var(--hair); padding-bottom:14px; margin-bottom:14px}
-  .mark{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:38px;
-    letter-spacing:.22em; text-transform:uppercase; line-height:1}
-  .mark-sub{font-family:'Barlow Condensed',sans-serif; font-weight:500; font-size:15px;
-    letter-spacing:.26em; text-transform:uppercase; color:var(--muted)}
-  .meta{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px 26px}
-  .field-label{font-family:'Barlow Condensed',sans-serif; font-size:12px; letter-spacing:.02em;
-    text-transform:uppercase; color:var(--muted); display:block; margin-bottom:2px}
-  .field-value{font-family:'IBM Plex Mono',monospace; font-size:14px}
-  .hydro{font-style:italic; color:var(--muted)}
-  .notice{border:1px solid var(--ink); border-left-width:6px; background:var(--panel);
-    padding:16px 20px; margin-bottom:24px}
-  .notice-tag{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px;
-    letter-spacing:.02em; text-transform:uppercase; display:block; margin-bottom:6px}
-  .notice p{margin:0 0 8px} .notice p:last-child{margin:0}
-  .band{margin:0 0 30px}
-  .band-head{display:flex; align-items:baseline; gap:14px; border-bottom:1.5px solid var(--ink);
-    padding-bottom:7px; margin-bottom:18px}
-  .band-title{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:20px;
-    letter-spacing:.02em; text-transform:uppercase; margin:0}
-  .band-note{font-size:14px; color:var(--muted); font-style:italic}
-  .card{border:1px solid var(--ink); background:var(--panel); margin-bottom:14px}
-  .card-head{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:baseline;
-    padding:12px 18px; border-bottom:1px solid var(--hair); background:var(--zone-1)}
-  .cand{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:17px;
-    border:1.4px solid var(--ink); width:28px; height:28px; display:flex;
-    align-items:center; justify-content:center}
-  .cand-name{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:17px}
-  .chip{font-family:'Barlow Condensed',sans-serif; font-size:12px; letter-spacing:.08em;
-    text-transform:uppercase; border:1px solid var(--ink); padding:1px 9px}
-  .chip-solid{background:var(--ink); color:var(--panel)}
-  .rail{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-  .cell{padding:14px 18px; border-right:1px solid var(--hair-soft)}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Barlow',system-ui,sans-serif; font-size:16px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sheet{max-width:1000px; margin:0 auto; padding:44px 22px 120px}
+
+  /* ---- masthead: title left, timeframe right, as in the reference ---- */
+  .head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    gap:16px; flex-wrap:wrap; margin-bottom:8px;
+    animation:fadeUp .5s var(--ease) both;
+  }
+  .mark{
+    font-family:'Barlow Condensed',sans-serif; font-weight:700;
+    font-size:clamp(26px,4.4vw,38px); letter-spacing:.2em;
+    text-transform:uppercase; line-height:1; margin:0;
+  }
+  .tf{
+    font-family:'Barlow Condensed',sans-serif; font-weight:600;
+    font-size:clamp(14px,2.2vw,19px); letter-spacing:.2em; text-transform:uppercase;
+  }
+  .sub{
+    font-family:'Barlow Condensed',sans-serif; font-size:12.5px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--dim); margin:0 0 30px;
+    animation:fadeUp .5s var(--ease) 60ms both;
+  }
+
+  /* ---- state line: the one thing readable at a glance ---- */
+  .state{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:0 0 22px; margin-bottom:26px; border-bottom:1px solid var(--hair);
+    animation:fadeUp .5s var(--ease) 120ms both;
+  }
+  .badge{
+    font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px;
+    letter-spacing:.2em; text-transform:uppercase; padding:5px 14px;
+    border:1.5px solid var(--ink); position:relative; overflow:hidden;
+  }
+  .badge.on{background:var(--ink); color:var(--paper)}
+  .badge.live::after{
+    content:""; position:absolute; inset:0; background:var(--ink); opacity:0;
+    animation:breathe 2.8s ease-in-out infinite;
+  }
+  .state-text{font-size:17px}
+  .state-meta{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--dim)}
+
+  /* ---- price rail: four numbers, nothing else ---- */
+  .rail{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    border:1px solid var(--hair); background:var(--sheet); margin-bottom:26px;
+  }
+  .cell{
+    padding:16px 18px; border-right:1px solid var(--hair-soft);
+    animation:fadeUp .45s var(--ease) both;
+  }
   .cell:last-child{border-right:none}
-  .cell-lab{font-family:'Barlow Condensed',sans-serif; font-size:11px; letter-spacing:.1em;
-    text-transform:uppercase; color:var(--muted); display:block; margin-bottom:3px}
-  .px{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600}
-  .px-sub{font-size:12px; color:var(--muted); display:block; margin-top:2px}
-  .plate{border:1px solid var(--ink); background:var(--panel); overflow:hidden}
+  .cell-lab{
+    font-family:'Barlow Condensed',sans-serif; font-size:11px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--dim); display:block; margin-bottom:5px;
+  }
+  .px{
+    font-family:'IBM Plex Mono',monospace; font-size:clamp(20px,3.2vw,25px);
+    font-weight:600; letter-spacing:-.01em;
+  }
+  .px-sub{font-size:11.5px; color:var(--dim); display:block; margin-top:4px}
+
+  /* ---- the chart owns the page ---- */
+  .plate{
+    border:1px solid var(--hair); background:var(--sheet); overflow:hidden;
+    animation:fadeUp .6s var(--ease) 180ms both;
+  }
   .plate svg{display:block; width:100%; height:auto}
-  .blocked{padding:16px 18px; font-style:italic; color:var(--muted)}
-  .controls{border:1px solid var(--ink); background:var(--panel); padding:18px 20px;
-    margin-bottom:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
-    gap:14px 18px; align-items:end}
-  select{width:100%; font-family:'IBM Plex Mono',monospace; font-size:15px; padding:8px 10px;
-    border:1px solid var(--ink); background:var(--panel); color:var(--ink); border-radius:0}
-  button{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:15px;
-    letter-spacing:.02em; text-transform:uppercase; padding:10px 22px;
-    border:1.5px solid var(--ink); background:var(--ink); color:var(--panel);
-    cursor:pointer; border-radius:0}
-  button:hover{background:var(--panel); color:var(--ink)}
-  a{color:var(--ink)}
-  a:focus-visible,button:focus-visible,select:focus-visible{outline:2.5px solid var(--ink); outline-offset:2px}
-  pre.ws{font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--zone-1);
-    border:1px solid var(--hair); padding:12px; overflow-x:auto; margin:0}
-  .foot{margin-top:36px; padding-top:16px; border-top:1px solid var(--hair);
-    font-size:14px; color:var(--muted)}
-  .err pre{font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--zone-1);
-    padding:12px; overflow-x:auto}
+  .legend{list-style:none; margin:20px 0 0; padding:0}
+  .legend li{
+    position:relative; padding:10px 0 10px 34px; font-size:14.5px;
+    border-bottom:1px solid var(--hair-soft);
+    animation:fadeUp .45s var(--ease) both;
+  }
+  .legend .n{
+    position:absolute; left:0; top:10px; width:21px; height:21px; border-radius:50%;
+    border:1.2px solid var(--ink); display:flex; align-items:center;
+    justify-content:center; font-family:'IBM Plex Mono',monospace;
+    font-size:11px; font-weight:600;
+  }
+  .legend b{font-family:'Barlow Condensed',sans-serif; letter-spacing:.12em; font-weight:600}
+
+  /* ---- everything else folds away ---- */
+  details{border-top:1px solid var(--hair); animation:fadeUp .45s var(--ease) both}
+  details:last-of-type{border-bottom:1px solid var(--hair)}
+  summary{
+    cursor:pointer; list-style:none; padding:16px 2px; display:flex;
+    align-items:center; justify-content:space-between; gap:12px;
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:14px;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
+    transition:color .22s var(--ease);
+  }
+  summary:hover,summary:focus-visible{color:var(--ink)}
+  summary::-webkit-details-marker{display:none}
+  summary .plus{
+    font-family:'IBM Plex Mono',monospace; font-size:16px; color:var(--dim);
+    transition:transform .3s var(--ease), color .22s var(--ease);
+  }
+  details[open] summary{color:var(--ink)}
+  details[open] summary .plus{transform:rotate(45deg); color:var(--ink)}
+  .fold{padding:2px 2px 26px; animation:unfold .4s var(--ease) both}
+  .fold p{margin:0 0 10px; font-size:14.5px}
+  .fold p:last-child{margin:0}
+  .quiet{color:var(--dim); font-style:italic}
+  .warn{border-left:2px solid var(--ink); padding-left:14px}
+  pre{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--sheet);
+    border:1px solid var(--hair); padding:13px; margin:0; color:var(--ink);
+    white-space:pre-wrap; word-break:break-word;
+  }
+  select{
+    font-family:'IBM Plex Mono',monospace; font-size:14px; padding:9px 12px;
+    border:1px solid var(--hair); background:var(--sheet); color:var(--ink);
+    border-radius:0; transition:border-color .22s var(--ease);
+  }
+  select:hover{border-color:var(--ink)}
+  button{
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:14px;
+    letter-spacing:.16em; text-transform:uppercase; padding:10px 22px;
+    border:1.5px solid var(--ink); background:transparent; color:var(--ink);
+    cursor:pointer; border-radius:0;
+    transition:background .22s var(--ease), color .22s var(--ease);
+  }
+  button:hover{background:var(--ink); color:var(--paper)}
+  a{
+    color:var(--ink); text-decoration:none; border-bottom:1px solid var(--hair);
+    transition:border-color .22s var(--ease);
+  }
+  a:hover{border-color:var(--ink)}
+  a:focus-visible,button:focus-visible,select:focus-visible,summary:focus-visible{
+    outline:2px solid var(--ink); outline-offset:3px;
+  }
+  .controls{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+  .foot{
+    margin-top:34px; font-family:'Barlow Condensed',sans-serif; font-size:11.5px;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
+    display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  }
+
+  @keyframes fadeUp{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
+  @keyframes unfold{from{opacity:0; transform:translateY(-6px)} to{opacity:1; transform:none}}
+  @keyframes breathe{0%,100%{opacity:0} 50%{opacity:.13}}
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important; transition:none!important}
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="sheet">
 
-  <header class="cartouche">
-    <div class="cartouche-top">
-      <span class="mark">Surfer</span>
-      <span class="mark-sub">Daily Signal</span>
-    </div>
-    {% if board %}
-    <div class="meta">
-      <div><span class="field-label">종목</span><span class="field-value">{{ symbol }}</span></div>
-      <div><span class="field-label">기준 세션 (완료)</span><span class="field-value">{{ board.last_complete }}</span></div>
-      <div><span class="field-label">적용 대상</span><span class="field-value">{{ sig.session }}</span></div>
-      <div><span class="field-label">엔진</span><span class="field-value">{{ board.engine_version }}</span></div>
-      <div><span class="field-label">데이터 경과</span><span class="field-value">{{ '%.1f'|format(board.staleness_hours) }}h</span></div>
-    </div>
-    {% endif %}
-    <p style="margin:14px 0 0"><a href="/">← 모호율 진단</a> · <a href="/backtest">백테스트 →</a></p>
-  </header>
-
-  <form class="controls" method="get" action="/levels">
-    <label>
-      <span class="field-label">종목</span>
-      <select name="symbol">
-        {% for s in symbols %}<option value="{{ s }}" {% if s==symbol %}selected{% endif %}>{{ s }}</option>{% endfor %}
-      </select>
-    </label>
-    <button type="submit">신호 산출</button>
-  </form>
-
-  <div class="notice">
-    <span class="notice-tag">검증되지 않은 규칙입니다</span>
-    <p><code>{{ board.engine_version if board else 'SURFER-ENGINE-v1.0.0' }}</code> —
-    후보 D로 통일(DES-002 §12.5). 선택 구간이 2024-08~2026-08 상승장 단일 구간이고,
-    <strong>§2.2R 국면별 판정을 아직 통과하지 않았습니다.</strong></p>
-    <p class="hydro">변동성 게이트의 알려진 실패 양식은 회복 초기 진입 차단이며,
-    회복 국면이 없는 표본에서는 그 비용이 나타나지 않습니다. 2018Q4·2020·2022 측정
-    전까지 “서퍼가 X라고 한다”는 “검증되지 않은 규칙이 X라고 한다”를 뜻합니다.</p>
+  <div class="head">
+    <h1 class="mark">Surfer</h1>
+    <span class="tf">Time Frame | 60M</span>
   </div>
+  <p class="sub">
+    {{ symbol }}{% if board %} · {{ board.last_complete }} 종료 · {{ sig.session }} 적용{% endif %}
+  </p>
 
   {% if error %}
-  <div class="notice err">
-    <span class="notice-tag">실행 실패</span>
-    <p><strong>{{ error }}</strong></p>
-    <pre>{{ trace }}</pre>
+  <div class="state">
+    <span class="badge on">Error</span>
+    <span class="state-text">{{ error }}</span>
   </div>
+  <details>
+    <summary>추적 <span class="plus">+</span></summary>
+    <div class="fold"><pre>{{ trace }}</pre></div>
+  </details>
+
   {% elif board %}
+  {% set st = sig.state.value %}
+  <div class="state">
+    <span class="badge {{ 'on live' if st in ('gated','no_levels') else 'live' }}">
+      {{ {'armed':'Armed','holding':'Holding','gated':'Gated','no_levels':'No Levels'}[st] }}
+    </span>
+    <span class="state-text">{{ sig.action }}</span>
+    {% if sig.atr_percentile is not none %}
+    <span class="state-meta">ATR {{ '%.0f'|format(sig.atr_percentile) }}p</span>
+    {% endif %}
+  </div>
+
+  {% if sig.levels %}
+  <div class="rail">
+    <div class="cell" style="animation-delay:150ms">
+      <span class="cell-lab">Trigger</span>
+      <span class="px">{{ '%.4f'|format(sig.levels.entry_trigger) }}</span>
+      <span class="px-sub">진입 발동</span>
+    </div>
+    <div class="cell" style="animation-delay:210ms">
+      <span class="cell-lab">Limit</span>
+      <span class="px">{{ '%.4f'|format(sig.levels.entry_limit) }}</span>
+      <span class="px-sub">초과 시 미체결</span>
+    </div>
+    <div class="cell" style="animation-delay:270ms">
+      <span class="cell-lab">Stop</span>
+      <span class="px">{{ '%.4f'|format(sig.levels.initial_stop) }}</span>
+      <span class="px-sub">고정</span>
+    </div>
+    <div class="cell" style="animation-delay:330ms">
+      <span class="cell-lab">R</span>
+      <span class="px">{{ '%.4f'|format(sig.levels.entry_trigger - sig.levels.initial_stop) }}</span>
+      <span class="px-sub">ATR60 {{ '%.4f'|format(sig.atr60) if sig.atr60 else '—' }}</span>
+    </div>
+  </div>
+  {% elif sig.position %}
+  <div class="rail">
+    <div class="cell" style="animation-delay:150ms">
+      <span class="cell-lab">Entry</span>
+      <span class="px">{{ '%.4f'|format(sig.position.entry_price) }}</span>
+      <span class="px-sub">{{ sig.position.sessions_held }}세션 보유</span>
+    </div>
+    <div class="cell" style="animation-delay:210ms">
+      <span class="cell-lab">Structural</span>
+      <span class="px">{{ '%.4f'|format(sig.position.structural_exit) if sig.position.structural_exit else '—' }}</span>
+      <span class="px-sub">매일 재산출 · 래칫</span>
+    </div>
+    <div class="cell" style="animation-delay:270ms">
+      <span class="cell-lab">Fixed Stop</span>
+      <span class="px">{{ '%.4f'|format(sig.position.stop) }}</span>
+      <span class="px-sub">바닥</span>
+    </div>
+    <div class="cell" style="animation-delay:330ms">
+      <span class="cell-lab">Effective</span>
+      <span class="px">{{ '%.4f'|format(sig.effective_exit) }}</span>
+      <span class="px-sub">둘 중 높은 쪽</span>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if chart_svg %}
+  <div class="plate">{{ chart_svg|safe }}</div>
+  <ol class="legend">
+    <li style="animation-delay:900ms"><span class="n">1</span><b>Trigger</b> —
+      진입이 발동하는 가격. 이 위로 거래되면 스톱리밋이 체결됩니다.</li>
+    <li style="animation-delay:960ms"><span class="n">2</span><b>Limit</b> —
+      받아들일 최악의 체결가. 갭이 이 선을 넘어가면 체결하지 않고 넘어갑니다.</li>
+    <li style="animation-delay:1020ms"><span class="n">3</span><b>Stop</b> —
+      진입 시점에 고정. 구조 청산이 이 위로 올라오면 그쪽이 정상 퇴출 경로가 됩니다.</li>
+  </ol>
+  {% endif %}
+
+  <div style="height:34px"></div>
+
+  <details>
+    <summary>이 신호는 검증되지 않았습니다 <span class="plus">+</span></summary>
+    <div class="fold warn">
+      <p><code>{{ board.engine_version }}</code> — 후보 D로 통일 (DES-002 §12.5).</p>
+      <p>선택 구간이 상승장 단일 구간이고 <strong>§2.2R 국면별 판정을 통과하지
+      않았습니다.</strong> 변동성 게이트의 알려진 실패 양식은 회복 초기 진입 차단이며,
+      회복 국면이 없는 표본에서는 그 비용이 나타나지 않습니다.</p>
+      <p class="quiet">2018Q4·2020·2022 측정 전까지 “서퍼가 X라고 한다”는
+      “검증되지 않은 규칙이 X라고 한다”를 뜻합니다.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>엔진 구성 <span class="plus">+</span></summary>
+    <div class="fold">
+      <p><b>진입</b> — 전 세션 고가 돌파. 60분봉 ATR이 자기 252세션 분포의 80백분위
+      이상이면 게이트가 닫혀 레벨을 산출하지 않습니다.</p>
+      <p><b>청산</b> — 구조 청산: 전 세션 저가 − 0.25 ATR, 래칫(내려가지 않음).</p>
+      <p><b>손절</b> — 진입 시점 고정, 이동 없음. 유효 청산은 둘 중 높은 쪽이므로
+      고정 손절은 바닥으로만 작동합니다.</p>
+      <p><b>주기</b> — 하루 한 번, 개장 전 대기 주문. 장중 봉에 반응하지 않습니다.</p>
+    </div>
+  </details>
 
   {% if board.dropped_partial %}
-  <div class="notice">
-    <span class="notice-tag">미완료 세션 제외됨</span>
-    <p>{{ board.dropped_partial }} 세션은 봉이 {{ board.partial_bar_count }}개뿐이어서
-    아직 끝나지 않았습니다. 레벨 산출에서 제외했습니다.</p>
-    <p class="hydro">이걸 포함하면 닫히지 않은 봉으로 오늘의 레벨을 계산하게 됩니다 —
-    미래 참조이고, 숫자만 보면 전혀 이상하지 않아서 알아채기 어렵습니다.</p>
-  </div>
-  {% endif %}
-
-  {% if board.stale %}
-  <div class="notice">
-    <span class="notice-tag">데이터가 오래되었습니다</span>
-    <p>마지막 완료 세션의 종료 후 {{ '%.0f'|format(board.staleness_hours) }}시간이
-    지났습니다. 주말·휴장이면 정상이지만, 평일 아침에 30시간을 넘으면 데이터가
-    갱신되지 않은 것일 수 있습니다.</p>
-  </div>
-  {% endif %}
-
-  <section class="band">
-    <div class="band-head">
-      <h2 class="band-title">오늘의 신호</h2>
-      <span class="band-note">{{ board.last_complete }} 종료 데이터로 산출 · 개장 전 대기 주문</span>
+  <details>
+    <summary>미완료 세션 제외됨 <span class="plus">+</span></summary>
+    <div class="fold">
+      <p>{{ board.dropped_partial }} 세션은 봉이 {{ board.partial_bar_count }}개뿐이어서
+      아직 끝나지 않았습니다. 산출에서 제외했습니다.</p>
+      <p class="quiet">포함하면 닫히지 않은 봉으로 오늘의 레벨을 계산하게 됩니다 —
+      미래 참조이고, 숫자만 보면 이상하지 않아서 알아채기 어렵습니다.</p>
     </div>
+  </details>
+  {% endif %}
 
-    <div class="card">
-      <div class="card-head">
-        <span class="chip {{ 'chip-solid' if sig.state.value in ('gated','no_levels') else '' }}"
-              style="font-size:12.5px">{{ {'armed':'ARMED','holding':'HOLDING','gated':'GATED','no_levels':'NO LEVELS'}[sig.state.value] }}</span>
-        <span class="cand-name">{{ sig.action }}</span>
-        {% if sig.atr_percentile is not none %}
-        <span class="chip">ATR 백분위 {{ '%.0f'|format(sig.atr_percentile) }}</span>
-        {% endif %}
-        {% if sig.state.value == 'gated' %}<span class="chip chip-solid">게이트 차단</span>{% endif %}
-        {% if board.position_replayed %}<span class="chip chip-solid">포지션 보유 중</span>{% endif %}
-      </div>
-
-      {% if sig.levels %}
-      <div class="rail">
-        <div class="cell">
-          <span class="cell-lab">Trigger</span>
-          <span class="px">{{ '%.4f'|format(sig.levels.entry_trigger) }}</span>
-          <span class="px-sub">진입 발동 · 스톱리밋</span>
-        </div>
-        <div class="cell">
-          <span class="cell-lab">Limit</span>
-          <span class="px">{{ '%.4f'|format(sig.levels.entry_limit) }}</span>
-          <span class="px-sub">천장 — 초과 시 미체결</span>
-        </div>
-        <div class="cell">
-          <span class="cell-lab">Stop</span>
-          <span class="px">{{ '%.4f'|format(sig.levels.initial_stop) }}</span>
-          <span class="px-sub">고정 · 이후 이동 없음</span>
-        </div>
-        <div class="cell">
-          <span class="cell-lab">R (T−S)</span>
-          <span class="px">{{ '%.4f'|format(sig.levels.entry_trigger - sig.levels.initial_stop) }}</span>
-          <span class="px-sub">ATR60 {{ '%.4f'|format(sig.atr60) if sig.atr60 else '—' }}</span>
-        </div>
-      </div>
-      {% elif sig.position %}
-      <div class="rail">
-        <div class="cell">
-          <span class="cell-lab">진입가</span>
-          <span class="px">{{ '%.4f'|format(sig.position.entry_price) }}</span>
-          <span class="px-sub">{{ sig.position.sessions_held }}세션 보유</span>
-        </div>
-        <div class="cell">
-          <span class="cell-lab">구조 청산</span>
-          <span class="px">{{ '%.4f'|format(sig.position.structural_exit) if sig.position.structural_exit else '—' }}</span>
-          <span class="px-sub">매일 재산출 · 래칫</span>
-        </div>
-        <div class="cell">
-          <span class="cell-lab">고정 손절</span>
-          <span class="px">{{ '%.4f'|format(sig.position.stop) }}</span>
-          <span class="px-sub">바닥 · 이동 없음</span>
-        </div>
-        <div class="cell">
-          <span class="cell-lab">유효 청산</span>
-          <span class="px">{{ '%.4f'|format(sig.effective_exit) }}</span>
-          <span class="px-sub">둘 중 높은 쪽</span>
-        </div>
-      </div>
-      {% else %}
-      <p class="blocked">{{ sig.note }}</p>
+  <details>
+    <summary>데이터 상태{% if board.stale %} · 오래됨{% endif %} <span class="plus">+</span></summary>
+    <div class="fold">
+      <pre>{{ windows }}</pre>
+      <p style="margin-top:10px">마지막 완료 세션 종료 후
+      {{ '%.0f'|format(board.staleness_hours) }}시간 · 가용 {{ board.sessions_available }}세션</p>
+      {% if board.stale %}
+      <p class="quiet">주말·휴장이면 정상입니다. 평일 아침에 30시간을 넘으면 데이터가
+      갱신되지 않은 것일 수 있습니다.</p>
       {% endif %}
     </div>
+  </details>
 
-    {% if chart_svg %}
-    <div class="plate" style="margin-top:14px">{{ chart_svg|safe }}</div>
-    <p class="band-note" style="display:block; margin-top:10px">
-      점선 왼쪽이 이미 닫힌 세션입니다. 모든 레벨이 거기서만 도출되고 개장 전에
-      대기 주문으로 제출됩니다.
-    </p>
-    {% endif %}
-  </section>
-
-  <section class="band">
-    <div class="band-head">
-      <h2 class="band-title">모의 집행 기록지</h2>
-      <span class="band-note">DES-002 §8 집행 반증 조건의 입력</span>
+  <details>
+    <summary>모의 집행 기록지 <span class="plus">+</span></summary>
+    <div class="fold">
+      <pre>{{ worksheet }}</pre>
+      <p style="margin-top:10px">복사해 스프레드시트에 붙이고 모의투자로 주문을 걸어
+      <code>actual_fill</code>과 <code>filled_yn</code>을 채우세요. 지정 레벨과 실현
+      체결가의 괴리, 그리고 체결률이 §8 반증 조건입니다.</p>
+      <p class="quiet">데이터 구매 없이 지금 측정할 수 있고, 여기서 탈락하면
+      사지 않게 됩니다.</p>
     </div>
-    <pre class="ws">{{ worksheet }}</pre>
-    <p class="band-note" style="display:block; margin-top:12px">
-      복사해서 스프레드시트에 붙이고, 모의투자로 실제 주문을 걸어 <code>actual_fill</code>과
-      <code>filled_yn</code>을 채우세요. 지정 레벨과 실현 체결가의 괴리, 그리고 체결률이
-      §8의 반증 조건입니다. <strong>FirstRate 데이터 없이 지금 측정할 수 있고,
-      여기서 탈락하면 데이터를 사지 않게 됩니다.</strong>
-    </p>
-  </section>
+  </details>
 
+  <details>
+    <summary>종목 변경 <span class="plus">+</span></summary>
+    <div class="fold">
+      <form class="controls" method="get" action="/levels">
+        <select name="symbol">
+          {% for s in symbols %}<option value="{{ s }}" {% if s==symbol %}selected{% endif %}>{{ s }}</option>{% endfor %}
+        </select>
+        <button type="submit">신호 산출</button>
+      </form>
+    </div>
+  </details>
+
+  <details>
+    <summary>다른 화면 <span class="plus">+</span></summary>
+    <div class="fold">
+      <p><a href="/">모호율 진단</a> — 봉 하나에 두 레벨이 겹쳐 순서를 알 수 없는 세션의 비율</p>
+      <p><a href="/compare">후보 비교</a> — 후보 A~D를 나란히 (표본 내)</p>
+      <p><a href="/backtest">단일 백테스트</a> — 후보 하나를 상세히</p>
+    </div>
+  </details>
   {% endif %}
 
-  <p class="foot">
-    장중 시세를 추적하지 않습니다. 서퍼는 하루 한 번 판단하고 대기 주문에 집행을
-    위임하는 시스템이며, 실시간 화면은 새벽에 사람을 다시 화면 앞에 앉히는 경로가
-    됩니다. 이 화면은 주문을 넣지 않고 증권사 인증정보를 갖고 있지 않습니다.
-  </p>
+  <div class="foot">
+    <span>주문을 넣지 않음 · 인증정보 없음</span>
+    <span>{{ board.engine_version if board else 'Surfer' }}</span>
+  </div>
 </div>
 </body>
 </html>

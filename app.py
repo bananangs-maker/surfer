@@ -105,7 +105,8 @@ def index():
         if ex is not None:
             hist, sess, lv, amb = ex
             ctx["chart_svg"] = annotated_session_svg(
-                hist, sess, lv, amb, title=f"SURFER | {symbol}"
+                hist, sess, lv, amb, title=f"SURFER | {symbol}",
+                theme="dark", animate=True,
             )
             ctx["has_ambiguous"] = amb is not None
 
@@ -273,6 +274,8 @@ def levels_view():
         ctx["board"] = bd
         ctx["sig"] = bd.signal
         ctx["worksheet"] = board_mod.engine_worksheet(bd)
+        from windows import describe_windows as _dw
+        ctx["windows"] = _dw(ds)
         # Draw the engine's own levels on real bars when it has any to draw.
         if bd.signal.levels is not None:
             sessions = ds.sessions
@@ -285,7 +288,7 @@ def levels_view():
                     if tail else by[sessions[-1]].iloc[:0])
             ctx["chart_svg"] = annotated_session_svg(
                 hist, by[sessions[-1]], bd.signal.levels, None,
-                title=f"SURFER | {symbol}",
+                title=f"SURFER | {symbol}", theme="dark", animate=True,
             )
     except Exception as e:
         import traceback

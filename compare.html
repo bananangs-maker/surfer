@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<meta name="color-scheme" content="dark">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SURFER · 후보 비교{% if symbol %} · {{ symbol }}{% endif %}</title>
@@ -8,9 +9,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#EDEDEB; --panel:#FFFFFF; --ink:#111111;
-    --zone-1:#D9D9D7; --zone-2:#C4C4C2; --muted:#8A8A88;
-    --hair:rgba(17,17,17,.22); --hair-soft:rgba(17,17,17,.10);
+    /* Dark mode inverts the reference sheet's tonal relationships rather than
+       recolouring them. No hue: a monochrome sheet cannot imply that one outcome
+       is the good one. */
+    --paper:#0E1014;
+    --panel:#12141A;
+    --ink:#E9E7E2;
+    --zone-1:#252932;
+    --zone-2:#1B1F27;
+    --muted:#8C8F98;
+    --hair:rgba(233,231,226,.16);
+    --hair-soft:rgba(233,231,226,.07);
   }
   *{box-sizing:border-box}
   body{margin:0; background:var(--paper); color:var(--ink);
@@ -50,7 +59,7 @@
     letter-spacing:.02em; text-transform:uppercase; padding:10px 22px;
     border:1.5px solid var(--ink); background:var(--ink); color:var(--panel);
     cursor:pointer; border-radius:0}
-  button:hover{background:var(--panel); color:var(--ink)}
+  button:hover{background:var(--ink); color:var(--paper)}
   a{color:var(--ink)}
   a:focus-visible,button:focus-visible,select:focus-visible{outline:2.5px solid var(--ink); outline-offset:2px}
   .grid{width:100%; border-collapse:collapse; font-size:15px; background:var(--panel)}

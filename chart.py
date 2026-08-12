@@ -25,6 +25,47 @@ from schema import EntryStyle, LevelSet
 W, H = 900.0, 520.0
 PAD_L, PAD_R, PAD_T, PAD_B = 96.0, 132.0, 64.0, 72.0
 
+# The reference sheet is light; dark mode inverts the tonal relationships rather
+# than recolouring them. Hollow still means up and solid still means down, so the
+# only thing that changes is which end of the scale is paper.
+THEMES = {
+    "dark": {
+        "paper": "#12141A", "ink": "#E9E7E2", "dim": "#8C8F98",
+        "zone": "#252932", "grid": "#2A2E38", "hatch": "#E9E7E2",
+        "up_fill": "#12141A",     # hollow
+        "down_fill": "#E9E7E2",   # solid
+    },
+    "light": {
+        "paper": "#FFFFFF", "ink": "#111111", "dim": "#8A8A88",
+        "zone": "#D9D9D7", "grid": "#E4E4E2", "hatch": "#111111",
+        "up_fill": "#FFFFFF", "down_fill": "#111111",
+    },
+}
+
+# Animation: strokes draw themselves in, candles rise into place, right-rail
+# boxes settle last. Sequenced so the eye reads the chart in the order the system
+# does - closed sessions, then levels, then the session being armed.
+_ANIM_CSS = """
+<style>
+  @keyframes sfDraw { to { stroke-dashoffset: 0 } }
+  @keyframes sfRise { from { opacity:0; transform: translateY(9px) } to { opacity:1; transform:none } }
+  @keyframes sfFade { from { opacity:0 } to { opacity:1 } }
+  @keyframes sfPulse { 0%,100% { opacity:.30 } 50% { opacity:.62 } }
+  .sf-candle { animation: sfRise .42s cubic-bezier(.22,.7,.24,1) both }
+  .sf-level  { stroke-dasharray: 7 5; animation: sfFade .5s ease both }
+  .sf-sweep  { animation: sfDraw 1.05s cubic-bezier(.35,.9,.2,1) both }
+  .sf-box    { animation: sfRise .38s cubic-bezier(.22,.7,.24,1) both }
+  .sf-note   { animation: sfFade .55s ease both }
+  .sf-zone   { animation: sfFade .7s ease both }
+  .sf-live   { animation: sfPulse 2.6s ease-in-out infinite }
+  @media (prefers-reduced-motion: reduce) {
+    .sf-candle,.sf-level,.sf-sweep,.sf-box,.sf-note,.sf-zone,.sf-live {
+      animation: none !important; stroke-dashoffset: 0 !important; opacity: 1 !important;
+    }
+  }
+</style>
+"""
+
 
 @dataclass
 class _Scale:
@@ -47,6 +88,8 @@ def annotated_session_svg(
     ambiguous_bar_index: int | None = None,
     title: str = "SURFER | LEVEL SET",
     subtitle: str = "TIME FRAME | 60M",
+    theme: str = "dark",
+    animate: bool = True,
 ) -> str:
     """`history_bars` are the completed sessions the levels were derived from.
 
@@ -74,31 +117,41 @@ def annotated_session_svg(
     def cx(i: int) -> float:
         return PAD_L + step * (i + 0.5)
 
+    C = THEMES.get(theme, THEMES["dark"])
+    A = _ANIM_CSS if animate else ""
+
+    def cls(name: str, delay_ms: float = 0.0) -> str:
+        if not animate:
+            return ""
+        d = f' style="animation-delay:{delay_ms:.0f}ms"' if delay_ms else ""
+        return f' class="{name}"{d}'
+
     out: list[str] = [
         f'<svg viewBox="0 0 {W:.0f} {H:.0f}" xmlns="http://www.w3.org/2000/svg" '
         f'role="img" aria-label="{_esc(title)} — 완료된 세션에서 도출한 진입·손절 '
         f'레벨을 실제 60분봉에 표시한 주석 차트">',
+        A,
         '<defs>'
         '<pattern id="hatch" width="6" height="6" patternTransform="rotate(45)" '
         'patternUnits="userSpaceOnUse">'
-        '<line x1="0" y1="0" x2="0" y2="6" stroke="#111" stroke-width="1" opacity=".22"/>'
+        f'<line x1="0" y1="0" x2="0" y2="6" stroke="{C["hatch"]}" stroke-width="1" opacity=".22"/>'
         '</pattern>'
-        '<marker id="ar" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="6" '
-        'markerHeight="6" orient="auto"><path d="M0,1 L6,4 L0,7 z" fill="#111"/></marker>'
+        f'<marker id="ar" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="6" '
+        f'markerHeight="6" orient="auto"><path d="M0,1 L6,4 L0,7 z" fill="{C["ink"]}"/></marker>'
         '</defs>',
-        f'<rect x="0" y="0" width="{W}" height="{H}" fill="#FFFFFF"/>',
+        f'<rect x="0" y="0" width="{W}" height="{H}" fill="{C["paper"]}"/>',
     ]
 
     # title block
     out.append(
         f'<text x="{PAD_L - 60:.0f}" y="34" font-family="\'Barlow Condensed\',sans-serif" '
-        f'font-size="17" font-weight="600" letter-spacing="3.4" fill="#111">'
+        f'font-size="17" font-weight="600" letter-spacing="3.4" fill="{C['ink']}">'
         f'{_esc(title)}</text>'
     )
     out.append(
         f'<text x="{W - PAD_R + 108:.0f}" y="34" text-anchor="end" '
         f'font-family="\'Barlow Condensed\',sans-serif" font-size="17" '
-        f'font-weight="600" letter-spacing="3.4" fill="#111">{_esc(subtitle)}</text>'
+        f'font-weight="600" letter-spacing="3.4" fill="{C['ink']}">{_esc(subtitle)}</text>'
     )
 
     # boundary between completed sessions and the armed session
@@ -106,18 +159,18 @@ def annotated_session_svg(
         bx = PAD_L + step * n_hist
         out.append(
             f'<line x1="{bx:.1f}" y1="{PAD_T - 8:.0f}" x2="{bx:.1f}" '
-            f'y2="{H - PAD_B + 14:.0f}" stroke="#111" stroke-width="1" '
+            f'y2="{H - PAD_B + 14:.0f}" stroke="{C['ink']}" stroke-width="1" '
             f'stroke-dasharray="2 4" opacity=".55"/>'
         )
         out.append(
             f'<text x="{bx + 10:.1f}" y="{PAD_T - 14:.0f}" '
             f'font-family="\'Barlow Condensed\',sans-serif" font-size="11.5" '
-            f'letter-spacing="1.8" fill="#111" opacity=".75">ARMED SESSION</text>'
+            f'letter-spacing="1.8" fill="{C['ink']}" opacity=".75">ARMED SESSION</text>'
         )
         out.append(
             f'<text x="{bx - 10:.1f}" y="{PAD_T - 14:.0f}" text-anchor="end" '
             f'font-family="\'Barlow Condensed\',sans-serif" font-size="11.5" '
-            f'letter-spacing="1.8" fill="#111" opacity=".45">CLOSED</text>'
+            f'letter-spacing="1.8" fill="{C['ink']}" opacity=".45">CLOSED</text>'
         )
 
     # entry band, drawn as a zone rather than two lines
@@ -125,14 +178,14 @@ def annotated_session_svg(
     zy, zh = min(y_trig, y_lim), abs(y_lim - y_trig)
     out.append(
         f'<rect x="{PAD_L:.0f}" y="{zy:.1f}" width="{plot_w:.0f}" '
-        f'height="{max(zh, 2):.1f}" fill="#D9D9D7" opacity=".9"/>'
+        f'height="{max(zh, 2):.1f}" fill="{C['zone']}" opacity=".9"/>'
     )
     band = "ENTRY BAND (CEILING)" if levels.style is EntryStyle.BREAKOUT \
         else "ENTRY BAND (FLOOR)"
     out.append(
         f'<text x="{PAD_L + 8:.0f}" y="{zy + max(zh, 12) / 2 + 4:.1f}" '
         f'font-family="\'Barlow Condensed\',sans-serif" font-size="11.5" '
-        f'letter-spacing="1.9" fill="#111">{band}</text>'
+        f'letter-spacing="1.9" fill="{C['ink']}">{band}</text>'
     )
 
     # level hairlines + right-rail boxed prices.
@@ -154,28 +207,29 @@ def annotated_session_svg(
 
         out.append(
             f'<line x1="{PAD_L:.0f}" y1="{y:.1f}" x2="{W - PAD_R + 4:.0f}" '
-            f'y2="{y:.1f}" stroke="#111" stroke-width="{weight}" '
-            f'stroke-dasharray="7 5"/>'
+            f'y2="{y:.1f}" stroke="{C["ink"]}" stroke-width="{weight}"'
+            f'{cls("sf-level", 320 + num * 90)} stroke-dasharray="7 5"/>'
         )
         bx, bw = W - PAD_R + 12, 88.0
         if abs(by + bh / 2 - y) > 1:
             out.append(
                 f'<line x1="{W - PAD_R + 4:.0f}" y1="{y:.1f}" x2="{bx:.0f}" '
-                f'y2="{by + bh / 2:.1f}" stroke="#111" stroke-width=".8" opacity=".5"/>'
+                f'y2="{by + bh / 2:.1f}" stroke="{C['ink']}" stroke-width=".8" opacity=".5"/>'
             )
         out.append(
             f'<rect x="{bx:.0f}" y="{by:.1f}" width="{bw:.0f}" height="{bh:.0f}" '
-            f'fill="#FFFFFF" stroke="#111" stroke-width="1"/>'
+            f'fill="{C["paper"]}" stroke="{C["ink"]}" stroke-width="1"'
+            f'{cls("sf-box", 620 + num * 110)}/>'
         )
         out.append(
             f'<text x="{bx + bw / 2:.0f}" y="{by + 14.2:.1f}" text-anchor="middle" '
             f'font-family="\'IBM Plex Mono\',monospace" font-size="11.5" '
-            f'fill="#111">{price:,.4f}</text>'
+            f'fill="{C['ink']}">{price:,.4f}</text>'
         )
         out.append(
             f'<text x="{bx + bw / 2:.0f}" y="{by - 5:.1f}" text-anchor="middle" '
             f'font-family="\'Barlow Condensed\',sans-serif" font-size="10" '
-            f'letter-spacing="1.6" fill="#111">{_esc(label)}</text>'
+            f'letter-spacing="1.6" fill="{C['ink']}">{_esc(label)}</text>'
         )
         # Markers live in a left rail outside the plot, where nothing can collide
         # with them. Earlier they sat inside and overlapped the zone label.
@@ -183,13 +237,13 @@ def annotated_session_svg(
 
     def _marker(x: float, y: float, num: int) -> None:
         out.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8" fill="#FFFFFF" '
-            f'stroke="#111" stroke-width="1.2"/>'
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8" fill="{C['paper']}" '
+            f'stroke="{C['ink']}" stroke-width="1.2"/>'
         )
         out.append(
             f'<text x="{x:.1f}" y="{y + 3.6:.1f}" text-anchor="middle" '
             f'font-family="\'IBM Plex Mono\',monospace" font-size="10.5" '
-            f'font-weight="600" fill="#111">{num}</text>'
+            f'font-weight="600" fill="{C['ink']}">{num}</text>'
         )
 
     rail(levels.entry_limit, "LIMIT", 2)
@@ -206,14 +260,15 @@ def annotated_session_svg(
         op = ".38" if faint else "1"
         out.append(
             f'<line x1="{x:.1f}" y1="{sc.y(h):.1f}" x2="{x:.1f}" '
-            f'y2="{sc.y(l):.1f}" stroke="#111" stroke-width="1" opacity="{op}"/>'
+            f'y2="{sc.y(l):.1f}" stroke="{C["ink"]}" stroke-width="1" opacity="{op}"'
+            f'{cls("sf-candle", 30 + i * 26)}/>'
         )
         top, bot = sc.y(max(o, c)), sc.y(min(o, c))
-        fill = "#FFFFFF" if c >= o else "#111111"
+        fill = C["up_fill"] if c >= o else C["down_fill"]
         out.append(
             f'<rect x="{x - body_w / 2:.1f}" y="{top:.1f}" width="{body_w:.1f}" '
-            f'height="{max(bot - top, 1.4):.1f}" fill="{fill}" stroke="#111" '
-            f'stroke-width="1" opacity="{op}"/>'
+            f'height="{max(bot - top, 1.4):.1f}" fill="{fill}" stroke="{C["ink"]}" '
+            f'stroke-width="1" opacity="{op}"{cls("sf-candle", 30 + i * 26)}/>'
         )
 
     # the ambiguous bar, if one was supplied
@@ -225,36 +280,38 @@ def annotated_session_svg(
         out.append(
             f'<rect x="{x - body_w * 1.5:.1f}" y="{yh - 6:.1f}" '
             f'width="{body_w * 3:.1f}" height="{yl - yh + 12:.1f}" '
-            f'fill="url(#hatch)" stroke="#111" stroke-width="1.6"/>'
+            f'fill="url(#hatch)" stroke="{C["ink"]}" stroke-width="1.6"'
+            f'{cls("sf-live")}/>'
         )
         ax, ay = min(x + 30, W - PAD_R - 168), max(yh - 34, PAD_T + 10)
         out.append(
             f'<line x1="{x + body_w * 1.5:.1f}" y1="{yh - 4:.1f}" x2="{ax - 8:.1f}" '
-            f'y2="{ay:.1f}" stroke="#111" stroke-width="1" marker-end="url(#ar)"/>'
+            f'y2="{ay:.1f}" stroke="{C['ink']}" stroke-width="1" marker-end="url(#ar)"/>'
         )
         _marker(ax + 8, ay, 4)
         out.append(
             f'<text x="{ax + 22:.0f}" y="{ay + 4:.0f}" '
             f'font-family="\'Barlow Condensed\',sans-serif" font-size="11.5" '
-            f'letter-spacing="1.9" font-weight="600" fill="#111">AMBIGUOUS BAR</text>'
+            f'letter-spacing="1.9" font-weight="600" fill="{C['ink']}">AMBIGUOUS BAR</text>'
         )
 
     # baseline rail
     out.append(
         f'<line x1="{PAD_L:.0f}" y1="{H - PAD_B + 14:.0f}" x2="{W - PAD_R + 4:.0f}" '
-        f'y2="{H - PAD_B + 14:.0f}" stroke="#111" stroke-width="1" opacity=".35"/>'
+        f'y2="{H - PAD_B + 14:.0f}" stroke="{C['ink']}" stroke-width="1" opacity=".35"/>'
     )
     if len(session_bars):
         d = session_bars["session_date"].iloc[0]
         out.append(
             f'<text x="{PAD_L:.0f}" y="{H - PAD_B + 34:.0f}" '
             f'font-family="\'IBM Plex Mono\',monospace" font-size="11" '
-            f'fill="#8A8A88">{_esc(d)}</text>'
+            f'fill="{C['dim']}">{_esc(d)}</text>'
         )
     out.append(
         f'<text x="{W - PAD_R + 4:.0f}" y="{H - PAD_B + 34:.0f}" text-anchor="end" '
         f'font-family="\'Barlow\',sans-serif" font-size="10.5" font-style="italic" '
-        f'fill="#8A8A88">DERIVED FROM CLOSED SESSIONS / RESTING ORDER</text>'
+        f'fill="{C["dim"]}">HOLLOW UP / SOLID DOWN &#183; '
+        f'DERIVED FROM CLOSED SESSIONS</text>'
     )
     out.append("</svg>")
     return "".join(out)

@@ -126,14 +126,42 @@ def test_empty_feed_raises_rather_than_inventing_levels():
 
 
 def test_levels_page_renders(ds):
-    """Now a single-engine signal page (§12.5), not the four-candidate board."""
+    """Single-engine signal page (§12.5): state badge, price rail, worksheet."""
     from app import app
 
     with app.test_client() as c:
         html = c.get("/levels?symbol=SYNTH3X").data.decode()
     assert "실행 실패" not in html
-    assert "오늘의 신호" in html
-    assert "symbol,engine,state" in html
+    assert 'class="badge' in html                 # the state at a glance
+    assert "symbol,engine,state" in html          # execution worksheet
+    assert "SURFER-ENGINE-" in html
+
+
+def test_levels_page_is_minimal_and_folds_the_rest(ds):
+    """The chart owns the page; auxiliary panels are collapsed.
+
+    Pinned because the value of this screen is that one glance answers "what do I
+    place today". Every panel added above the fold erodes that.
+    """
+    from app import app
+
+    with app.test_client() as c:
+        html = c.get("/levels?symbol=SYNTH3X").data.decode()
+    assert html.count("<details>") >= 5
+    # Nothing may be open by default.
+    assert "<details open" not in html
+    assert "svg viewBox" in html
+
+
+def test_page_is_dark_and_respects_reduced_motion(ds):
+    from app import app
+
+    with app.test_client() as c:
+        html = c.get("/levels?symbol=SYNTH3X").data.decode()
+    assert 'content="dark"' in html
+    assert "--paper:#0E1014" in html
+    # Animations must be defeasible; some people get sick from them.
+    assert html.count("prefers-reduced-motion") >= 2
 
 
 def test_levels_page_is_cheap():
