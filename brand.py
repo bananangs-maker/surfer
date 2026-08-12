@@ -183,52 +183,62 @@ def loading_html(subtitle: str = "", ink: str = "#E9E7E2",
 (function(){{
   var el = document.getElementById("sf-load");
   if (!el) return;
-  var stay = false;
+
+  var MIN_MS = 1750;
+  var MAX_MS = 12000;
+  var stay = false;      // set when navigating away: keep the overlay up
+
   function show(){{ el.removeAttribute("data-ready"); }}
-  function done(){{ if (!stay) el.setAttribute("data-ready",""); }}
+  function hide(){{ if (!stay) el.setAttribute("data-ready",""); }}
 
-  // Entrance: the page arrives fully rendered, so this only covers the font swap
-  // and the chart's own entrance animation.
-  if (document.readyState === "complete") setTimeout(done, 1700);
-  else window.addEventListener("load", function(){{ setTimeout(done, 1700); }});
-  setTimeout(done, 12000);   // failsafe: a screen that outlives its request is a bug
-
-  // Departure: this is the part that matters. The server does the slow work BEFORE
-  // any HTML exists, so a purely client-side screen can never cover it - by the
-  // time the script runs, the wait is already over. Raising the screen on
-  // navigation instead covers exactly that gap: the old document stays on screen
-  // while the server computes, so the overlay stays visible until the new page
-  // paints.
-  function hold(){{
-    stay = true;
-    show();
-    var sub = el.querySelector(".sf-load-sub");
-    if (sub) sub.textContent = "계산 중 — 서버 응답을 기다립니다";
+  function restart(){{
+    el.querySelectorAll("[class*='ld-'] > g,.sf-load-word,.sf-load-sub,"
+                        + ".sf-load-bar,.sf-load-bar i,#ld-ring,#ld-ring2")
+      .forEach(function(n){{
+        var a = n.style.animation;
+        n.style.animation = "none";
+        void n.offsetWidth;
+        n.style.animation = a || "";
+      }});
   }}
-  document.addEventListener("submit", function(e){{
-    if (e.target && e.target.tagName === "FORM") hold();
-  }}, true);
-  document.addEventListener("click", function(e){{
-    var a = e.target && e.target.closest && e.target.closest("a[href]");
-    if (!a) return;
-    var href = a.getAttribute("href") || "";
-    if (href.charAt(0) === "#" || a.target === "_blank") return;
-    if (a.host && a.host !== location.host) return;
-    hold();
-  }}, true);
-  // Browsers restore a cached page on Back; the overlay must not be stuck up.
-  // Always release on pageshow, not only when the page came from cache. Back
-  // navigation that re-renders still runs this script fresh, but a cached restore
-  // keeps the old `stay` flag - and an overlay left up over a perfectly good page
-  // is worse than no overlay at all.
-  window.addEventListener("pageshow", function(){{
+
+  function run(){{
     stay = false;
-    setTimeout(function(){{ el.setAttribute("data-ready",""); }}, 400);
-  }});
-  // Same for a cancelled navigation: the browser fires this when it comes back.
-  window.addEventListener("popstate", function(){{
-    stay = false; el.setAttribute("data-ready","");
-  }});
+    show(); restart();
+    setTimeout(hide, MIN_MS);
+    setTimeout(hide, MAX_MS);
+  }}
+
+  // COVERING THE WAIT, NOT FOLLOWING IT.
+  // The slow work happens on the server, before any HTML exists - by the time this
+  // script runs the wait is already over. A screen shown here only flashes after
+  // the fact. What actually needs covering is the gap between clicking and the next
+  // document arriving, and during that gap the OLD document is still on screen. So
+  // the overlay is raised on navigation and simply left up: the browser discards it
+  // when the new page lands, which is exactly when it should go.
+  function hold(label){{
+    stay = true;
+    show(); restart();
+    var sub = el.querySelector(".sf-load-sub");
+    if (sub && label) sub.textContent = label;
+  }}
+
+  document.addEventListener("submit", function(){{ hold("계산 중"); }}, true);
+  document.addEventListener("click", function(e){{
+    var a = e.target.closest && e.target.closest("a[href]");
+    if (!a) return;
+    if (a.target === "_blank" || a.hasAttribute("download")) return;
+    if (a.host !== location.host) return;                 // leaving the site
+    if (a.getAttribute("href").charAt(0) === "#") return;  // same-page anchor
+    hold("불러오는 중");
+  }}, true);
+
+  run();
+
+  // A cached restore keeps the old `stay` flag, and an overlay left up over a
+  // perfectly good page is worse than no overlay at all.
+  window.addEventListener("pageshow", function(e){{ if (e.persisted) run(); }});
+  window.addEventListener("popstate", function(){{ stay = false; hide(); }});
 }})();
 </script>"""
 

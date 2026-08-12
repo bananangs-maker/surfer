@@ -64,8 +64,39 @@ def test_mark_inherits_colour_by_default():
 def test_loading_screen_gives_up_on_its_own():
     """A loading screen that outlives its request is a broken page."""
     html = loading_html()
-    assert "setTimeout(done, 12000)" in html
+    assert "MAX_MS = 12000" in html
     assert "data-ready" in html
+
+
+def test_loading_screen_does_not_gate_on_readystate():
+    """Why it failed to appear on refresh.
+
+    The first version called done() immediately when readyState was already
+    "complete", which is the normal case on a reload - the screen was created and
+    dismissed in the same tick.
+    """
+    html = loading_html()
+    assert "readyState" not in html
+    assert "run();" in html
+
+
+def test_loading_screen_handles_back_forward_cache():
+    """A bfcache restore does not re-run scripts.
+
+    The page returns with data-ready still set, so the overlay is present but
+    permanently hidden. pageshow.persisted is the only signal for that case.
+    """
+    html = loading_html()
+    assert "pageshow" in html
+    assert "e.persisted" in html
+
+
+def test_loading_screen_restarts_its_animations():
+    """Re-showing the overlay without restarting animations reveals the finished
+    end state with nothing moving, which looks broken rather than absent."""
+    html = loading_html()
+    assert "offsetWidth" in html          # forced reflow
+    assert 'n.style.animation = "none"' in html
 
 
 def test_loading_screen_respects_reduced_motion():
@@ -101,7 +132,7 @@ def test_loading_screen_rises_on_navigation():
     html = loading_html()
     assert 'document.addEventListener("submit"' in html
     assert 'document.addEventListener("click"' in html
-    assert "hold()" in html
+    assert "function hold(" in html
     assert "계산 중" in html
 
 

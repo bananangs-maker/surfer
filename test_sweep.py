@@ -16,14 +16,28 @@ from loaders import load_synthetic
 
 @pytest.fixture(scope="module")
 def small():
-    """A coarse sweep: enough cells for neighbourhood analysis, quick enough to run."""
-    ds = load_synthetic(n_sessions=220)
+    """A sweep containing at least one COMPLETE neighbourhood.
+
+    A prefix of the shuffled queue is representative of the axes but does not
+    reliably contain any interior cell plus all eight of its neighbours, and without
+    one there is nothing eligible to rank. So this fixture takes one interior cell
+    and its full neighbourhood explicitly, plus a prefix for the distribution.
+    """
+    ds = load_synthetic(n_sessions=200)
     bh = buy_and_hold(ds, costs=Costs())
     bm = curve_metrics(bh)
     res = SW.SweepResult(bh_calmar=bm["calmar"], bh_mdd=bm["max_drawdown"],
                          total=len(SW.combos()))
-    for p in SW.combos()[:48]:
-        res.cells.append(SW.run_one(ds, p, bh, bm["max_drawdown"]))
+
+    centre = {"trigger": 0.1, "stop": 1.2, "gate_pct": 80.0, "exit_buf": 0.25}
+    idx = tuple(SW.GRID[a].index(centre[a]) for a in SW.AXES)
+    wanted = [centre] + [
+        dict(zip(SW.AXES, [SW.GRID[a][j] for a, j in zip(SW.AXES, n)]))
+        for n in SW.neighbours(idx)
+    ]
+    for p in wanted + SW.combos()[:20]:
+        if p not in [c.params for c in res.cells]:
+            res.cells.append(SW.run_one(ds, p, bh, bm["max_drawdown"]))
     return res
 
 
@@ -157,3 +171,61 @@ def test_analysis_reports_axis_coverage(small):
     assert set(a["coverage"]) == set(SW.AXES)
     assert all(0.0 < v <= 1.0 for v in a["coverage"].values())
     assert a["partial"] is (len(small.cells) < small.total)
+
+
+def test_only_interior_cells_are_selectable(small):
+    """Worst-of-neighbourhood is a MINIMUM, so fewer neighbours scores higher free.
+
+    On the first TQQQ run the top-ranked cell was a CORNER of the 4-D grid with 4
+    neighbours against an interior cell's 8, and all ten leaders sat on at least one
+    edge while none was fully interior. The ranking was measuring neighbour count.
+    """
+    a = SW.analyse(small)
+    full = a["full_nb"]
+    assert full == 2 * len(SW.AXES)
+    for s in a["ranked"]:
+        assert s["interior"] is True
+        assert s["n_neighbours"] == full
+    for s in a["boundary_ranked"]:
+        assert s["n_neighbours"] < full
+
+
+def test_boundary_cells_are_still_reported():
+    """Not hidden: a parameter at the edge means the grid was drawn in the wrong
+    place, which is worth knowing even though it cannot be selected."""
+    from backtest import Costs, buy_and_hold, curve_metrics
+
+    ds = load_synthetic(n_sessions=200)
+    bh = buy_and_hold(ds, costs=Costs())
+    bm = curve_metrics(bh)
+    res = SW.SweepResult(bh_calmar=bm["calmar"], bh_mdd=bm["max_drawdown"],
+                         total=len(SW.combos()))
+    for p in SW.combos()[:60]:
+        res.cells.append(SW.run_one(ds, p, bh, bm["max_drawdown"]))
+    a = SW.analyse(res)
+    assert a["boundary_ranked"], "boundary cells must be visible, just not eligible"
+
+
+def test_no_interior_cells_blocks_selection():
+    """A sweep too partial to contain a complete neighbourhood cannot select."""
+    from backtest import Costs, buy_and_hold, curve_metrics
+
+    ds = load_synthetic(n_sessions=180)
+    bh = buy_and_hold(ds, costs=Costs())
+    bm = curve_metrics(bh)
+    res = SW.SweepResult(bh_calmar=bm["calmar"], bh_mdd=bm["max_drawdown"],
+                         total=len(SW.combos()))
+    for p in SW.combos()[:5]:
+        res.cells.append(SW.run_one(ds, p, bh, bm["max_drawdown"]))
+    a = SW.analyse(res)
+    assert a["verdict"]["selectable"] is False
+    assert "완전 내부" in a["verdict"]["reason"]
+
+
+def test_sweep_page_continues_itself_until_done():
+    """Twenty manual refreshes is a chore, not a tool."""
+    from app import app
+
+    with app.test_client() as c:
+        partial = c.get("/sweep?symbol=SYNTH3X&reset=1").data.decode()
+    assert 'http-equiv="refresh"' in partial

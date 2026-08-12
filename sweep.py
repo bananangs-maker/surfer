@@ -160,23 +160,39 @@ def analyse(res: SweepResult) -> dict:
     ratios = np.array([c.mdd_ratio for c in res.cells], dtype=float)
     pass_rate = float(np.mean([c.passes_mdd for c in res.cells]))
 
-    scored = []
+    # Worst-of-neighbourhood is a MINIMUM, so a cell with fewer neighbours scores
+    # higher for free. On this grid the corner has 4 neighbours and an interior cell
+    # has 8, which made the statistic systematically prefer the boundary: on the
+    # first TQQQ run every one of the top ten sat on at least one edge and none was
+    # fully interior. The ranking was measuring neighbour count, not robustness.
+    #
+    # Only cells with a COMPLETE neighbourhood are eligible. A boundary cell cannot
+    # be shown robust - half its surroundings were never measured - and a parameter
+    # sitting at the edge also means the grid was drawn in the wrong place.
+    full_nb = 2 * len(AXES)
+    scored, boundary = [], []
     for idx, c in index.items():
         nb = [index[j] for j in neighbours(idx) if j in index]
-        if len(nb) < 2:                      # too few to judge stability
-            continue
         vals = [c.calmar] + [x.calmar for x in nb]
-        scored.append({
+        rec = {
             "cell": c,
             "worst_neighbour_calmar": float(min(vals)),
             "neighbour_range": float(max(vals) - min(vals)),
             "n_neighbours": len(nb),
-        })
+            "interior": len(neighbours(idx)) == full_nb,
+        }
+        (scored if rec["interior"] and len(nb) == full_nb else boundary).append(rec)
     scored.sort(key=lambda s: s["worst_neighbour_calmar"], reverse=True)
+    boundary.sort(key=lambda s: s["worst_neighbour_calmar"], reverse=True)
 
     best = scored[0] if scored else None
     verdict = {"selectable": False, "reason": ""}
-    if pass_rate < PASS_RATE_FLOOR:
+    if not scored:
+        verdict["reason"] = (
+            f"완전 내부 조합이 아직 없습니다 — 이웃 {full_nb}개를 갖춘 조합만 "
+            "견고성을 판정할 수 있습니다"
+        )
+    elif pass_rate < PASS_RATE_FLOOR:
         verdict["reason"] = (
             f"통과율 {pass_rate:.1%} < {PASS_RATE_FLOOR:.0%} — "
             "격자 안에 견고한 영역이 없습니다 (§15.4)"
@@ -209,6 +225,9 @@ def analyse(res: SweepResult) -> dict:
         "calmar_q": [float(np.percentile(calmars, q)) for q in (0, 25, 50, 75, 100)],
         "ratio_q": [float(np.percentile(ratios, q)) for q in (0, 25, 50, 75, 100)],
         "ranked": scored[:12],
+        "boundary_ranked": boundary[:6],
+        "n_interior": len(scored),
+        "full_nb": full_nb,
         "best": best,
         "verdict": verdict,
         # Partial sweeps leave some axis values with no cells yet; nan rather

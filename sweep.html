@@ -6,6 +6,11 @@
 <meta name="color-scheme" content="dark">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>SURFER · 견고성 스윕{% if symbol %} · {{ symbol }}{% endif %}</title>
+{% if remaining and not error %}
+<!-- 256조합은 한 요청에 끝나지 않는다. 수동으로 20번 새로고침하게 만드는 것은
+     도구가 아니라 잡일이므로 남은 동안 자동으로 이어 계산한다. -->
+<meta http-equiv="refresh" content="2">
+{% endif %}
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{--paper:#0B0D11;--ink:#E9E7E2;--dim:#7E8189;
@@ -90,7 +95,7 @@
 
   <div class="bar"><i style="width:{{ (100 * a.n / a.total)|round(1) }}%"></i></div>
   <div class="prog">{{ a.n }} / {{ a.total }} 조합
-    {% if remaining %}· 남은 {{ remaining }}개 — 새로고침하면 이어서 계산합니다
+    {% if remaining %}· 남은 {{ remaining }}개 — 2초마다 자동으로 이어 계산합니다
     (요청당 {{ per_req }}개){% else %}· 완료{% endif %}
     · 축 커버리지 {% for ax, v in a.coverage.items() %}{{ ax }} {{ '%.0f'|format(v*100) }}%{% if not loop.last %} / {% endif %}{% endfor %}
   </div>
@@ -138,7 +143,14 @@
   <p class="quiet" style="font-size:12px">한 축의 값들 사이에 차이가 없으면 그 파라미터는
     결과를 설명하지 않습니다 — 조정해도 의미가 없다는 뜻입니다</p>
 
-  <h2>4 · 이웃최솟값 상위 — 선택 후보</h2>
+  <h2>4 · 이웃최솟값 상위 — 선택 후보 (완전 내부 조합만)</h2>
+  <p class="quiet" style="font-size:12px">
+    이웃최솟값은 <strong>최솟값</strong>이므로 이웃이 적을수록 자동으로 높아집니다.
+    이 격자에서 꼭짓점은 이웃이 {{ a.full_nb // 2 }}개, 내부는 {{ a.full_nb }}개입니다 —
+    보정하지 않으면 순위가 견고성이 아니라 이웃 개수로 결정됩니다. 실제로 첫 실행에서
+    상위 10개 전부가 경계에 걸려 있었습니다. 이웃 {{ a.full_nb }}개를 갖춘
+    <strong>완전 내부 조합 {{ a.n_interior }}개</strong>만 후보로 봅니다.
+  </p>
   <div class="row">
     <span class="chip {{ '' if a.verdict.selectable else 'chip-solid' }}">
       {{ '선택 가능' if a.verdict.selectable else '선택 불가' }}</span>
@@ -168,6 +180,30 @@
       {% endfor %}
     </tbody>
   </table>
+  {% if a.boundary_ranked %}
+  <h2>4b · 경계 조합 — 참고용, 선택 불가</h2>
+  <table>
+    <thead><tr><th>trigger</th><th>stop</th><th>gate</th><th>exit_buf</th>
+      <th>이웃최솟값</th><th>이웃</th><th>낙폭비</th></tr></thead>
+    <tbody>
+      {% for s in a.boundary_ranked %}
+      <tr>
+        <td class="num">{{ s.cell.params.trigger }}</td>
+        <td class="num">{{ s.cell.params.stop }}</td>
+        <td class="num">{{ '없음' if s.cell.params.gate_pct > 100 else s.cell.params.gate_pct|int }}</td>
+        <td class="num">{{ s.cell.params.exit_buf }}</td>
+        <td class="num">{{ '%.3f'|format(s.worst_neighbour_calmar) }}</td>
+        <td class="num">{{ s.n_neighbours }}</td>
+        <td class="num">{{ '%.2f'|format(s.cell.mdd_ratio) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="quiet" style="font-size:12px">경계에 걸린 파라미터는 <strong>격자를 잘못
+    그렸다는 신호</strong>이기도 합니다 — 진짜 최적이 격자 밖에 있을 수 있습니다.
+    격자 확장은 사전등록 위반이므로 하지 않습니다(§15.2).</p>
+  {% endif %}
+
   <p class="quiet" style="font-size:12px">
     <strong>이것은 표본 내입니다.</strong> 이웃최솟값 선택은 분산을 줄이지만 표본 내
     문제를 없애지 못합니다. 선택된 조합은 2018Q4·2020·2022에서 §2.2R을 통과해야 하며,

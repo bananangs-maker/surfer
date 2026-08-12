@@ -422,3 +422,35 @@ restore keeps the old flag.
 an **armed order** sitting in the market. The ATR percentile is a measurement, so it
 uses its own class and is solid and still. A moving dashed line there would assert
 something false about what the system is doing.
+
+
+### Two flaws the sweep found in itself
+
+**Evaluation order.** `itertools.product` varies the last axis fastest, so the
+first 56 cells all shared one trigger value; every top-ranked candidate had it and
+that read as a finding. Order is now shuffled under a fixed seed, and the page
+reports per-axis coverage.
+
+**Boundary bias in the selection statistic.** Worst-of-neighbourhood is a
+*minimum*, so a cell with fewer neighbours scores higher for free. On the full TQQQ
+run the top-ranked cell was a **corner** of the 4-D grid — 4 neighbours against an
+interior cell's 8 — and all ten leaders sat on at least one edge while none was
+fully interior. The ranking was measuring neighbour count. Only cells with a
+complete neighbourhood (16 of 256) are now eligible; boundary cells are still shown
+but cannot be selected, because half their surroundings were never measured and a
+parameter at the grid edge means the grid was drawn in the wrong place.
+
+## Loading screen: covering the wait, not following it
+
+The first version was decorative and did not know it. The slow work happens on the
+server, **before any HTML exists**, so by the time the script runs the wait is over
+— the screen only flashed after the fact, and on a refresh `readyState` was already
+`complete` and it never appeared at all.
+
+What needs covering is the gap between a click and the next document, and during
+that gap the *old* document is still on screen. The overlay is therefore raised on
+navigation — form submit and same-host link clicks — and simply left up; the
+browser discards it when the new page lands, which is exactly when it should go.
+External links, `_blank`, downloads and same-page anchors are left alone.
+`pageshow.persisted` and `popstate` release it, because a bfcache restore keeps the
+old flag and an overlay stranded over a perfectly good page is worse than none.
