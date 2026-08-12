@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SURFER · 오늘의 레벨{% if symbol %} · {{ symbol }}{% endif %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDEDEB; --panel:#FFFFFF; --ink:#111111;
+    --zone-1:#D9D9D7; --zone-2:#C4C4C2; --muted:#8A8A88;
+    --hair:rgba(17,17,17,.22); --hair-soft:rgba(17,17,17,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Barlow',system-ui,sans-serif; font-size:16px; line-height:1.55}
+  .wrap{max-width:1080px; margin:0 auto; padding:32px 20px 96px}
+  .cartouche{border:1px solid var(--ink); background:var(--panel); padding:22px 24px; margin-bottom:24px}
+  .cartouche-top{display:flex; flex-wrap:wrap; gap:6px 18px; align-items:baseline;
+    border-bottom:1px solid var(--hair); padding-bottom:14px; margin-bottom:14px}
+  .mark{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:38px;
+    letter-spacing:.22em; text-transform:uppercase; line-height:1}
+  .mark-sub{font-family:'Barlow Condensed',sans-serif; font-weight:500; font-size:15px;
+    letter-spacing:.26em; text-transform:uppercase; color:var(--muted)}
+  .meta{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px 26px}
+  .field-label{font-family:'Barlow Condensed',sans-serif; font-size:12px; letter-spacing:.02em;
+    text-transform:uppercase; color:var(--muted); display:block; margin-bottom:2px}
+  .field-value{font-family:'IBM Plex Mono',monospace; font-size:14px}
+  .hydro{font-style:italic; color:var(--muted)}
+  .notice{border:1px solid var(--ink); border-left-width:6px; background:var(--panel);
+    padding:16px 20px; margin-bottom:24px}
+  .notice-tag{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px;
+    letter-spacing:.02em; text-transform:uppercase; display:block; margin-bottom:6px}
+  .notice p{margin:0 0 8px} .notice p:last-child{margin:0}
+  .band{margin:0 0 30px}
+  .band-head{display:flex; align-items:baseline; gap:14px; border-bottom:1.5px solid var(--ink);
+    padding-bottom:7px; margin-bottom:18px}
+  .band-title{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:20px;
+    letter-spacing:.02em; text-transform:uppercase; margin:0}
+  .band-note{font-size:14px; color:var(--muted); font-style:italic}
+  .card{border:1px solid var(--ink); background:var(--panel); margin-bottom:14px}
+  .card-head{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:baseline;
+    padding:12px 18px; border-bottom:1px solid var(--hair); background:var(--zone-1)}
+  .cand{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:17px;
+    border:1.4px solid var(--ink); width:28px; height:28px; display:flex;
+    align-items:center; justify-content:center}
+  .cand-name{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:17px}
+  .chip{font-family:'Barlow Condensed',sans-serif; font-size:12px; letter-spacing:.08em;
+    text-transform:uppercase; border:1px solid var(--ink); padding:1px 9px}
+  .chip-solid{background:var(--ink); color:var(--panel)}
+  .rail{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .cell{padding:14px 18px; border-right:1px solid var(--hair-soft)}
+  .cell:last-child{border-right:none}
+  .cell-lab{font-family:'Barlow Condensed',sans-serif; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); display:block; margin-bottom:3px}
+  .px{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600}
+  .px-sub{font-size:12px; color:var(--muted); display:block; margin-top:2px}
+  .blocked{padding:16px 18px; font-style:italic; color:var(--muted)}
+  .controls{border:1px solid var(--ink); background:var(--panel); padding:18px 20px;
+    margin-bottom:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+    gap:14px 18px; align-items:end}
+  select{width:100%; font-family:'IBM Plex Mono',monospace; font-size:15px; padding:8px 10px;
+    border:1px solid var(--ink); background:var(--panel); color:var(--ink); border-radius:0}
+  button{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:15px;
+    letter-spacing:.02em; text-transform:uppercase; padding:10px 22px;
+    border:1.5px solid var(--ink); background:var(--ink); color:var(--panel);
+    cursor:pointer; border-radius:0}
+  button:hover{background:var(--panel); color:var(--ink)}
+  a{color:var(--ink)}
+  a:focus-visible,button:focus-visible,select:focus-visible{outline:2.5px solid var(--ink); outline-offset:2px}
+  pre.ws{font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--zone-1);
+    border:1px solid var(--hair); padding:12px; overflow-x:auto; margin:0}
+  .foot{margin-top:36px; padding-top:16px; border-top:1px solid var(--hair);
+    font-size:14px; color:var(--muted)}
+  .err pre{font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--zone-1);
+    padding:12px; overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="cartouche">
+    <div class="cartouche-top">
+      <span class="mark">Surfer</span>
+      <span class="mark-sub">Daily Levels</span>
+    </div>
+    {% if board %}
+    <div class="meta">
+      <div><span class="field-label">종목</span><span class="field-value">{{ symbol }}</span></div>
+      <div><span class="field-label">기준 세션 (완료)</span><span class="field-value">{{ board.last_complete }}</span></div>
+      <div><span class="field-label">적용 대상</span><span class="field-value">{{ board.armed_for }}</span></div>
+      <div><span class="field-label">데이터 경과</span><span class="field-value">{{ '%.1f'|format(board.staleness_hours) }}h</span></div>
+    </div>
+    {% endif %}
+    <p style="margin:14px 0 0"><a href="/">← 모호율 진단</a> · <a href="/backtest">백테스트 →</a></p>
+  </header>
+
+  <form class="controls" method="get" action="/levels">
+    <label>
+      <span class="field-label">종목</span>
+      <select name="symbol">
+        {% for s in symbols %}<option value="{{ s }}" {% if s==symbol %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit">레벨 산출</button>
+  </form>
+
+  <div class="notice">
+    <span class="notice-tag">어느 것도 선택된 신호가 아닙니다</span>
+    <p>후보 넷을 나란히 보여줍니다. 규칙 선택은 DES-002 §3.3에 따라 선택 구간
+    (2019년 이전) 측정으로만 하며, 그 데이터는 아직 없습니다.</p>
+    <p class="hydro">하나만 표시하면 검증되지 않은 규칙이 익숙함만으로 실전에
+    스며듭니다. 넷을 함께 두는 것이 그 경로를 막습니다.</p>
+  </div>
+
+  {% if error %}
+  <div class="notice err">
+    <span class="notice-tag">실행 실패</span>
+    <p><strong>{{ error }}</strong></p>
+    <pre>{{ trace }}</pre>
+  </div>
+  {% elif board %}
+
+  {% if board.dropped_partial %}
+  <div class="notice">
+    <span class="notice-tag">미완료 세션 제외됨</span>
+    <p>{{ board.dropped_partial }} 세션은 봉이 {{ board.partial_bar_count }}개뿐이어서
+    아직 끝나지 않았습니다. 레벨 산출에서 제외했습니다.</p>
+    <p class="hydro">이걸 포함하면 닫히지 않은 봉으로 오늘의 레벨을 계산하게 됩니다 —
+    미래 참조이고, 숫자만 보면 전혀 이상하지 않아서 알아채기 어렵습니다.</p>
+  </div>
+  {% endif %}
+
+  {% if board.stale %}
+  <div class="notice">
+    <span class="notice-tag">데이터가 오래되었습니다</span>
+    <p>마지막 완료 세션의 종료 후 {{ '%.0f'|format(board.staleness_hours) }}시간이
+    지났습니다. 주말·휴장이면 정상이지만, 평일 아침에 30시간을 넘으면 데이터가
+    갱신되지 않은 것일 수 있습니다.</p>
+  </div>
+  {% endif %}
+
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">후보별 레벨</h2>
+      <span class="band-note">{{ board.last_complete }} 종료 시점 데이터로 산출 · 개장 전 대기 주문용</span>
+    </div>
+
+    {% for r in board.rows %}
+    <div class="card">
+      <div class="card-head">
+        <span class="cand">{{ r.key }}</span>
+        <span class="cand-name">{{ r.label }}</span>
+        {% if r.style == 'breakout' %}<span class="chip">돌파 · 스톱리밋</span>
+        {% elif r.style == 'pullback' %}<span class="chip">되돌림 · 지정가</span>{% endif %}
+        {% if r.extra.get('percentile') is not none %}
+        <span class="chip">ATR 백분위 {{ '%.0f'|format(r.extra.get('percentile')) }}</span>
+        {% endif %}
+        {% if not r.levels %}<span class="chip chip-solid">레벨 없음</span>{% endif %}
+      </div>
+      {% if r.levels %}
+      <div class="rail">
+        <div class="cell">
+          <span class="cell-lab">Trigger</span>
+          <span class="px">{{ '%.4f'|format(r.levels.entry_trigger) }}</span>
+          <span class="px-sub">진입 발동</span>
+        </div>
+        <div class="cell">
+          <span class="cell-lab">Limit</span>
+          <span class="px">{{ '%.4f'|format(r.levels.entry_limit) }}</span>
+          <span class="px-sub">{{ '천장 — 초과 시 미체결' if r.style=='breakout' else '바닥 — 이탈 시 포기' }}</span>
+        </div>
+        <div class="cell">
+          <span class="cell-lab">Stop</span>
+          <span class="px">{{ '%.4f'|format(r.levels.initial_stop) }}</span>
+          <span class="px-sub">고정 · 이후 이동 없음</span>
+        </div>
+        <div class="cell">
+          <span class="cell-lab">R (T−S)</span>
+          <span class="px">{{ '%.4f'|format(r.extra.get('r_multiple') or 0) }}</span>
+          <span class="px-sub">ATR60 {{ '%.4f'|format(r.extra.get('atr60')) if r.extra.get('atr60') else '—' }}</span>
+        </div>
+      </div>
+      {% else %}
+      <p class="blocked">{{ r.note }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">모의 집행 기록지</h2>
+      <span class="band-note">DES-002 §8 집행 반증 조건의 입력</span>
+    </div>
+    <pre class="ws">{{ worksheet }}</pre>
+    <p class="band-note" style="display:block; margin-top:12px">
+      복사해서 스프레드시트에 붙이고, 모의투자로 실제 주문을 걸어 <code>actual_fill</code>과
+      <code>filled_yn</code>을 채우세요. 지정 레벨과 실현 체결가의 괴리, 그리고 체결률이
+      §8의 반증 조건입니다. <strong>FirstRate 데이터 없이 지금 측정할 수 있고,
+      여기서 탈락하면 데이터를 사지 않게 됩니다.</strong>
+    </p>
+  </section>
+
+  {% endif %}
+
+  <p class="foot">
+    장중 시세를 추적하지 않습니다. 서퍼는 하루 한 번 판단하고 대기 주문에 집행을
+    위임하는 시스템이며, 실시간 화면은 새벽에 사람을 다시 화면 앞에 앉히는 경로가
+    됩니다. 이 화면은 주문을 넣지 않고 증권사 인증정보를 갖고 있지 않습니다.
+  </p>
+</div>
+</body>
+</html>

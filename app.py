@@ -17,6 +17,7 @@ from flask import Flask, render_template, request
 import integrity
 from diagnostics import purchase_case, resolution_comparison
 from backtest import Costs, buy_and_hold, curve_metrics, run_backtest, verdict
+import board as board_mod
 from chart import annotated_session_svg, pick_example
 from levels import (PlaceholderBreakout, PriorCloseVolatilityBreakout,
                     PullbackToPriorLow, StructuralExit, VolatilityRegimeGate,
@@ -202,6 +203,32 @@ def backtest_view():
         ctx["error"] = f"{type(e).__name__}: {e}"
         ctx["trace"] = traceback.format_exc()
     return render_template("backtest.html", **ctx)
+
+
+@app.route("/levels")
+def levels_view():
+    """Today's levels for every candidate, side by side.
+
+    Cheap by construction: it reads the cached dataset and evaluates four
+    generators once. No performance figures appear here, so it does not touch the
+    DES-002 §3.3 window lock - levels are a statement about where orders would
+    rest, not about what they earned.
+    """
+    symbol = request.args.get("symbol", "SYNTH3X").upper()
+    if symbol not in SYMBOLS:
+        symbol = "SYNTH3X"
+    ctx = {"symbols": SYMBOLS, "symbol": symbol, "board": None,
+           "worksheet": "", "error": None}
+    try:
+        ds = get_dataset(symbol)
+        bd = board_mod.build(ds, symbol)
+        ctx["board"] = bd
+        ctx["worksheet"] = board_mod.order_worksheet(bd)
+    except Exception as e:
+        import traceback
+        ctx["error"] = f"{type(e).__name__}: {e}"
+        ctx["trace"] = traceback.format_exc()
+    return render_template("levels_board.html", **ctx)
 
 
 @app.route("/healthz")

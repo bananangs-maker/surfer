@@ -93,11 +93,12 @@ aggregate.py      60m -> daily, for the resolution comparison
 diagnostics.py    resolution comparison; purchase case
 backtest.py       session mark-to-market, costs, buy-and-hold, DES-002 verdict
 chart.py          annotated candlestick SVG, monochrome
+board.py          today's levels for every candidate, side by side
 windows.py        mechanical lock on the validation window
-app.py            web viewer: / diagnostic, /backtest
-report_template.html, backtest.html
+app.py            web viewer: / diagnostic, /levels, /backtest
+report_template.html, backtest.html, levels_board.html
 run_diagnostic.py CLI
-test_*.py         73 tests
+test_*.py         86 tests
 SURFER-DES-001.md pre-registration, use 1 (ON HOLD)
 SURFER-DES-002.md pre-registration, use 2 (ACTIVE)
 ```
@@ -202,3 +203,31 @@ their boxes and labels collided and both numbers became unreadable.
 
 Wide Latin tracking applies to the wordmark and chart labels only. Applied to
 Hangul it pulls syllable blocks apart, so Korean UI text uses normal spacing.
+
+
+## Daily use: /levels
+
+Once a day, before the US open, `/levels` shows what each of the four candidates
+would arm for the next session: trigger, limit, fixed stop, and R.
+
+**All four are shown and none is marked as chosen.** Selection belongs to
+DES-002 §3.3 and happens on 2019-and-earlier data, which does not exist yet.
+Displaying one candidate's levels every morning would let an unvalidated rule
+slide into live use through familiarity, which is the exact path pre-registration
+exists to block. Candidate D reproduces A's levels when its gate is open, and
+reports the ATR percentile with its reason when it blocks.
+
+There is no live quoting, by design. SURFER does not react to intraday bars; a
+screen that updated during the session would put a person back in front of it at
+03:00 KST, which is what the resting-order design exists to avoid.
+
+**Lookahead guard.** If the feed's final session is still in progress, using it as
+history would derive today's levels from bars that have not closed. `board.py`
+detects this by bar count — seven for a regular session, four for an early close
+— and drops the partial session, reporting that it did. The guard matters because
+the failure is silent: levels built on an open session look entirely ordinary.
+
+The page also emits a paste-able worksheet for paper execution, with
+`actual_fill` and `filled_yn` left blank. Those columns are the input to the
+DES-002 §8 execution falsifier, which is measurable now, without any purchased
+history — and a failure there stops the data purchase.
