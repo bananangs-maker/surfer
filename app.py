@@ -12,6 +12,7 @@ import time
 import traceback
 from dataclasses import asdict
 
+import pandas as pd
 from flask import Flask, render_template, request
 
 import integrity
@@ -264,13 +265,28 @@ def levels_view():
     symbol = request.args.get("symbol", "SYNTH3X").upper()
     if symbol not in SYMBOLS:
         symbol = "SYNTH3X"
-    ctx = {"symbols": SYMBOLS, "symbol": symbol, "board": None,
-           "worksheet": "", "error": None}
+    ctx = {"symbols": SYMBOLS, "symbol": symbol, "board": None, "sig": None,
+           "worksheet": "", "error": None, "chart_svg": None}
     try:
         ds = get_dataset(symbol)
-        bd = board_mod.build(ds, symbol)
+        bd = board_mod.build_engine(ds, symbol)
         ctx["board"] = bd
-        ctx["worksheet"] = board_mod.order_worksheet(bd)
+        ctx["sig"] = bd.signal
+        ctx["worksheet"] = board_mod.engine_worksheet(bd)
+        # Draw the engine's own levels on real bars when it has any to draw.
+        if bd.signal.levels is not None:
+            sessions = ds.sessions
+            by = {
+                d: g.sort_values("ts").reset_index(drop=True)
+                for d, g in ds.bars.groupby("session_date", sort=True)
+            }
+            tail = sessions[-3:-1] if len(sessions) >= 3 else sessions[:-1]
+            hist = (pd.concat([by[s] for s in tail], ignore_index=True)
+                    if tail else by[sessions[-1]].iloc[:0])
+            ctx["chart_svg"] = annotated_session_svg(
+                hist, by[sessions[-1]], bd.signal.levels, None,
+                title=f"SURFER | {symbol}",
+            )
     except Exception as e:
         import traceback
         ctx["error"] = f"{type(e).__name__}: {e}"

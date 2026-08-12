@@ -43,9 +43,15 @@ from schema import BAR_COLUMNS, Dataset
 # SURFER-DES-002 §3.3. Selection ends with 2019; validation is everything after.
 SELECTION_END = date(2019, 12, 31)
 
-# Set False to restore the split. While True, validation_slice() does not raise
-# and the app does not restrict any symbol.
-SPLIT_REPEALED = True
+# Restored 2026-08-12 (SURFER-DES-002 §12.3). Candidate D was selected on
+# 2024-08 onward, so everything BEFORE that is untouched by selection and is
+# genuine out-of-sample. The repeal turned out to cost nothing: the split came
+# back on its own once the choice was made, with the boundary reversed.
+SPLIT_REPEALED = False
+
+# §12.4: the sessions already spent on selection. Anything outside this is
+# out-of-sample and is reserved for the §2.2R verdict.
+SELECTION_USED_FROM = date(2024, 8, 1)
 REPEAL_NOTE = (
     "§3.3 폐기 2026-08-12 (사용자 결정). 야후 730일 구간에서 후보를 선택함. "
     "표본 외 검증 없음 — 선택된 후보는 상승 구간 2년에 맞춰진 것이며, "
@@ -120,14 +126,24 @@ def _slice(ds: Dataset, keep) -> Dataset:
 
 
 def selection_slice(ds: Dataset) -> Dataset:
-    """Sessions up to and including SELECTION_END. Always available."""
-    return _slice(ds, lambda d: d <= SELECTION_END)
+    """Sessions already used for selection: 2024-08-01 onward (§12.4).
+
+    Named "selection" because that is what they were spent on. Re-running a
+    comparison here cannot produce new evidence - the candidate was chosen from
+    exactly these bars.
+    """
+    return _slice(ds, lambda d: d >= SELECTION_USED_FROM)
 
 
 def validation_slice(ds: Dataset) -> Dataset:
-    """Sessions after SELECTION_END. Requires an unlock record unless repealed."""
+    """Sessions BEFORE 2024-08-01 - untouched by selection. Requires an unlock.
+
+    This is the only out-of-sample evidence that exists. It holds 2018Q4, 2020Q1
+    and 2022, which is where a volatility gate's cost would appear if it has one.
+    Spending it casually leaves nothing.
+    """
     if SPLIT_REPEALED:
-        return _slice(ds, lambda d: d > SELECTION_END)
+        return _slice(ds, lambda d: d < SELECTION_USED_FROM)
     rec = Unlock.load()
     if rec is None:
         raise WindowLocked(
@@ -138,16 +154,16 @@ def validation_slice(ds: Dataset) -> Dataset:
             "To open it: unlock_validation('A'|'B'|'C'|'D', note='...') and "
             "commit the resulting VALIDATION_UNLOCKED.json."
         )
-    return _slice(ds, lambda d: d > SELECTION_END)
+    return _slice(ds, lambda d: d < SELECTION_USED_FROM)
 
 
 def describe_windows(ds: Dataset) -> str:
     sel = selection_slice(ds)
     rec = Unlock.load()
-    n_val = sum(1 for d in ds.sessions if d > SELECTION_END)
+    n_val = sum(1 for d in ds.sessions if d < SELECTION_USED_FROM)
     lines = [
-        f"  selection  (<= {SELECTION_END}) : {len(sel.sessions):5} sessions",
-        f"  validation (>  {SELECTION_END}) : {n_val:5} sessions",
+        f"  selection  (>= {SELECTION_USED_FROM}) : {len(sel.sessions):5} sessions  (spent)",
+        f"  validation (<  {SELECTION_USED_FROM}) : {n_val:5} sessions  (out-of-sample)",
     ]
     if SPLIT_REPEALED:
         lines.append("  validation status            : SPLIT REPEALED 2026-08-12")
@@ -158,6 +174,11 @@ def describe_windows(ds: Dataset) -> str:
         lines.append(
             f"  validation status            : unlocked {rec.unlocked_at} "
             f"for candidate {rec.chosen_candidate}"
+        )
+    if n_val == 0:
+        lines.append(
+            "  NOTE: no out-of-sample sessions in this feed. The 730-day yfinance "
+            "window is entirely selection data; §2.2R needs pre-2024 history."
         )
     if len(sel.sessions) == 0 and not SPLIT_REPEALED:
         lines.append(

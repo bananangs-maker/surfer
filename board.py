@@ -1,4 +1,13 @@
-"""Daily levels board: what each candidate would arm for the next session.
+"""Daily signal board: what the engine arms for the next session.
+
+Unified on SURFER-ENGINE-v1.0.0 (candidate D) per SURFER-DES-002 §12.5. The
+four-candidate view it replaced existed only because no rule had been chosen; with
+one engine there is a single signal, which is what can actually be operated,
+paper traded and falsified.
+
+The engine is NOT validated - §2.2R has not run, because the out-of-sample window
+(pre-2024) is not in the free feed. "SURFER says X" means "an unvalidated rule
+says X" until then, and the page says so.
 
 Once a day, before the open — the cadence SURFER was designed around. No live
 quoting: the system does not react to intraday bars, and a screen that updates
@@ -24,6 +33,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 
+from engine import Engine, Signal, State
 from levels import (PlaceholderBreakout, PriorCloseVolatilityBreakout,
                     PullbackToPriorLow, VolatilityRegimeGate)
 from schema import NY, EntryStyle, LevelSet
@@ -48,6 +58,23 @@ class Row:
     levels: LevelSet | None
     note: str
     extra: dict
+
+
+@dataclass
+class EngineBoard:
+    """Single-engine view. Rows are kept for the candidate comparison page."""
+
+    signal: Signal
+    engine_version: str
+    engine_basis: str
+    last_complete: date
+    dropped_partial: date | None
+    partial_bar_count: int | None
+    sessions_available: int
+    staleness_hours: float
+    stale: bool
+    symbol: str
+    position_replayed: bool
 
 
 @dataclass
@@ -163,3 +190,53 @@ def order_worksheet(board: Board) -> str:
             f"{r.levels.initial_stop},{board.last_complete}+1,,,,"
         )
     return "\n".join(lines)
+
+
+def build_engine(ds, symbol: str) -> EngineBoard:
+    """Today's single signal, with the open position reconstructed by replay.
+
+    The position is replayed from bars rather than stored. A stored position can
+    disagree with the price data after a missed run or a restart; a replayed one
+    cannot.
+    """
+    from engine import replay_position
+
+    sessions, dropped, dropped_n = _complete_sessions(ds)
+    if not sessions:
+        raise ValueError("no complete sessions in the feed")
+
+    by = {
+        d: g.sort_values("ts").reset_index(drop=True)
+        for d, g in ds.bars.groupby("session_date", sort=True)
+    }
+    last = sessions[-1]
+    last_ts = by[last]["ts"].iloc[-1]
+    now = datetime.now(timezone.utc)
+    hours = (now - last_ts.to_pydatetime()).total_seconds() / 3600.0
+
+    eng = Engine()
+    pos = replay_position(ds, eng, upto=last)
+    history = [by[s] for s in sessions[max(0, len(sessions) - eng.lookback_sessions):]]
+    sig = eng.signal(history, armed_for=last + timedelta(days=1), position=pos)
+
+    return EngineBoard(
+        signal=sig, engine_version=eng.version, engine_basis=eng.basis,
+        last_complete=last, dropped_partial=dropped, partial_bar_count=dropped_n,
+        sessions_available=len(sessions), staleness_hours=hours,
+        stale=hours > 30, symbol=symbol, position_replayed=pos is not None,
+    )
+
+
+def engine_worksheet(bd: EngineBoard) -> str:
+    """Paper-execution record for the DES-002 §8 execution falsifier."""
+    head = ("symbol,engine,state,trigger,limit,stop,effective_exit,"
+            "armed_for_session,actual_fill,fill_time,filled_yn,notes")
+    sig = bd.signal
+    lv = sig.levels
+    return "\n".join([
+        head,
+        f"{bd.symbol},{bd.engine_version},{sig.state.value},"
+        f"{lv.entry_trigger if lv else ''},{lv.entry_limit if lv else ''},"
+        f"{lv.initial_stop if lv else (sig.position.stop if sig.position else '')},"
+        f"{sig.effective_exit or ''},{bd.last_complete}+1,,,,",
+    ])

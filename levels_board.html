@@ -56,6 +56,8 @@
     text-transform:uppercase; color:var(--muted); display:block; margin-bottom:3px}
   .px{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600}
   .px-sub{font-size:12px; color:var(--muted); display:block; margin-top:2px}
+  .plate{border:1px solid var(--ink); background:var(--panel); overflow:hidden}
+  .plate svg{display:block; width:100%; height:auto}
   .blocked{padding:16px 18px; font-style:italic; color:var(--muted)}
   .controls{border:1px solid var(--ink); background:var(--panel); padding:18px 20px;
     margin-bottom:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
@@ -83,13 +85,14 @@
   <header class="cartouche">
     <div class="cartouche-top">
       <span class="mark">Surfer</span>
-      <span class="mark-sub">Daily Levels</span>
+      <span class="mark-sub">Daily Signal</span>
     </div>
     {% if board %}
     <div class="meta">
       <div><span class="field-label">종목</span><span class="field-value">{{ symbol }}</span></div>
       <div><span class="field-label">기준 세션 (완료)</span><span class="field-value">{{ board.last_complete }}</span></div>
-      <div><span class="field-label">적용 대상</span><span class="field-value">{{ board.armed_for }}</span></div>
+      <div><span class="field-label">적용 대상</span><span class="field-value">{{ sig.session }}</span></div>
+      <div><span class="field-label">엔진</span><span class="field-value">{{ board.engine_version }}</span></div>
       <div><span class="field-label">데이터 경과</span><span class="field-value">{{ '%.1f'|format(board.staleness_hours) }}h</span></div>
     </div>
     {% endif %}
@@ -103,15 +106,17 @@
         {% for s in symbols %}<option value="{{ s }}" {% if s==symbol %}selected{% endif %}>{{ s }}</option>{% endfor %}
       </select>
     </label>
-    <button type="submit">레벨 산출</button>
+    <button type="submit">신호 산출</button>
   </form>
 
   <div class="notice">
-    <span class="notice-tag">어느 것도 선택된 신호가 아닙니다</span>
-    <p>후보 넷을 나란히 보여줍니다. 규칙 선택은 DES-002 §3.3에 따라 선택 구간
-    (2019년 이전) 측정으로만 하며, 그 데이터는 아직 없습니다.</p>
-    <p class="hydro">하나만 표시하면 검증되지 않은 규칙이 익숙함만으로 실전에
-    스며듭니다. 넷을 함께 두는 것이 그 경로를 막습니다.</p>
+    <span class="notice-tag">검증되지 않은 규칙입니다</span>
+    <p><code>{{ board.engine_version if board else 'SURFER-ENGINE-v1.0.0' }}</code> —
+    후보 D로 통일(DES-002 §12.5). 선택 구간이 2024-08~2026-08 상승장 단일 구간이고,
+    <strong>§2.2R 국면별 판정을 아직 통과하지 않았습니다.</strong></p>
+    <p class="hydro">변동성 게이트의 알려진 실패 양식은 회복 초기 진입 차단이며,
+    회복 국면이 없는 표본에서는 그 비용이 나타나지 않습니다. 2018Q4·2020·2022 측정
+    전까지 “서퍼가 X라고 한다”는 “검증되지 않은 규칙이 X라고 한다”를 뜻합니다.</p>
   </div>
 
   {% if error %}
@@ -143,50 +148,80 @@
 
   <section class="band">
     <div class="band-head">
-      <h2 class="band-title">후보별 레벨</h2>
-      <span class="band-note">{{ board.last_complete }} 종료 시점 데이터로 산출 · 개장 전 대기 주문용</span>
+      <h2 class="band-title">오늘의 신호</h2>
+      <span class="band-note">{{ board.last_complete }} 종료 데이터로 산출 · 개장 전 대기 주문</span>
     </div>
 
-    {% for r in board.rows %}
     <div class="card">
       <div class="card-head">
-        <span class="cand">{{ r.key }}</span>
-        <span class="cand-name">{{ r.label }}</span>
-        {% if r.style == 'breakout' %}<span class="chip">돌파 · 스톱리밋</span>
-        {% elif r.style == 'pullback' %}<span class="chip">되돌림 · 지정가</span>{% endif %}
-        {% if r.extra.get('percentile') is not none %}
-        <span class="chip">ATR 백분위 {{ '%.0f'|format(r.extra.get('percentile')) }}</span>
+        <span class="chip {{ 'chip-solid' if sig.state.value in ('gated','no_levels') else '' }}"
+              style="font-size:12.5px">{{ {'armed':'ARMED','holding':'HOLDING','gated':'GATED','no_levels':'NO LEVELS'}[sig.state.value] }}</span>
+        <span class="cand-name">{{ sig.action }}</span>
+        {% if sig.atr_percentile is not none %}
+        <span class="chip">ATR 백분위 {{ '%.0f'|format(sig.atr_percentile) }}</span>
         {% endif %}
-        {% if not r.levels %}<span class="chip chip-solid">레벨 없음</span>{% endif %}
+        {% if sig.state.value == 'gated' %}<span class="chip chip-solid">게이트 차단</span>{% endif %}
+        {% if board.position_replayed %}<span class="chip chip-solid">포지션 보유 중</span>{% endif %}
       </div>
-      {% if r.levels %}
+
+      {% if sig.levels %}
       <div class="rail">
         <div class="cell">
           <span class="cell-lab">Trigger</span>
-          <span class="px">{{ '%.4f'|format(r.levels.entry_trigger) }}</span>
-          <span class="px-sub">진입 발동</span>
+          <span class="px">{{ '%.4f'|format(sig.levels.entry_trigger) }}</span>
+          <span class="px-sub">진입 발동 · 스톱리밋</span>
         </div>
         <div class="cell">
           <span class="cell-lab">Limit</span>
-          <span class="px">{{ '%.4f'|format(r.levels.entry_limit) }}</span>
-          <span class="px-sub">{{ '천장 — 초과 시 미체결' if r.style=='breakout' else '바닥 — 이탈 시 포기' }}</span>
+          <span class="px">{{ '%.4f'|format(sig.levels.entry_limit) }}</span>
+          <span class="px-sub">천장 — 초과 시 미체결</span>
         </div>
         <div class="cell">
           <span class="cell-lab">Stop</span>
-          <span class="px">{{ '%.4f'|format(r.levels.initial_stop) }}</span>
+          <span class="px">{{ '%.4f'|format(sig.levels.initial_stop) }}</span>
           <span class="px-sub">고정 · 이후 이동 없음</span>
         </div>
         <div class="cell">
           <span class="cell-lab">R (T−S)</span>
-          <span class="px">{{ '%.4f'|format(r.extra.get('r_multiple') or 0) }}</span>
-          <span class="px-sub">ATR60 {{ '%.4f'|format(r.extra.get('atr60')) if r.extra.get('atr60') else '—' }}</span>
+          <span class="px">{{ '%.4f'|format(sig.levels.entry_trigger - sig.levels.initial_stop) }}</span>
+          <span class="px-sub">ATR60 {{ '%.4f'|format(sig.atr60) if sig.atr60 else '—' }}</span>
+        </div>
+      </div>
+      {% elif sig.position %}
+      <div class="rail">
+        <div class="cell">
+          <span class="cell-lab">진입가</span>
+          <span class="px">{{ '%.4f'|format(sig.position.entry_price) }}</span>
+          <span class="px-sub">{{ sig.position.sessions_held }}세션 보유</span>
+        </div>
+        <div class="cell">
+          <span class="cell-lab">구조 청산</span>
+          <span class="px">{{ '%.4f'|format(sig.position.structural_exit) if sig.position.structural_exit else '—' }}</span>
+          <span class="px-sub">매일 재산출 · 래칫</span>
+        </div>
+        <div class="cell">
+          <span class="cell-lab">고정 손절</span>
+          <span class="px">{{ '%.4f'|format(sig.position.stop) }}</span>
+          <span class="px-sub">바닥 · 이동 없음</span>
+        </div>
+        <div class="cell">
+          <span class="cell-lab">유효 청산</span>
+          <span class="px">{{ '%.4f'|format(sig.effective_exit) }}</span>
+          <span class="px-sub">둘 중 높은 쪽</span>
         </div>
       </div>
       {% else %}
-      <p class="blocked">{{ r.note }}</p>
+      <p class="blocked">{{ sig.note }}</p>
       {% endif %}
     </div>
-    {% endfor %}
+
+    {% if chart_svg %}
+    <div class="plate" style="margin-top:14px">{{ chart_svg|safe }}</div>
+    <p class="band-note" style="display:block; margin-top:10px">
+      점선 왼쪽이 이미 닫힌 세션입니다. 모든 레벨이 거기서만 도출되고 개장 전에
+      대기 주문으로 제출됩니다.
+    </p>
+    {% endif %}
   </section>
 
   <section class="band">

@@ -126,13 +126,14 @@ def test_empty_feed_raises_rather_than_inventing_levels():
 
 
 def test_levels_page_renders(ds):
+    """Now a single-engine signal page (§12.5), not the four-candidate board."""
     from app import app
 
     with app.test_client() as c:
         html = c.get("/levels?symbol=SYNTH3X").data.decode()
     assert "실행 실패" not in html
-    assert "어느 것도 선택된 신호가 아닙니다" in html
-    assert "symbol,candidate,style" in html
+    assert "오늘의 신호" in html
+    assert "symbol,engine,state" in html
 
 
 def test_levels_page_is_cheap():
@@ -145,3 +146,86 @@ def test_levels_page_is_cheap():
         t0 = time.perf_counter()
         c.get("/levels?symbol=SYNTH3X")
         assert time.perf_counter() - t0 < 2.0
+
+
+# --- unified engine (DES-002 §12.5) ---------------------------------------
+
+def test_engine_signal_states_are_exhaustive(ds):
+    from engine import State
+
+    bd = B.build_engine(ds, "SYNTH3X")
+    assert bd.signal.state in set(State)
+    assert bd.engine_version.startswith("SURFER-ENGINE-")
+
+
+def test_engine_reproduces_candidate_d(ds):
+    """The engine IS candidate D. If it drifted, §11's measurement would no
+    longer describe what is being operated."""
+    import datetime as dt
+
+    from engine import Engine
+    from levels import VolatilityRegimeGate
+
+    sessions = ds.sessions
+    by = {
+        d: g.sort_values("ts").reset_index(drop=True)
+        for d, g in ds.bars.groupby("session_date", sort=True)
+    }
+    e = Engine()
+    hist = [by[s] for s in sessions[-e.lookback_sessions:]]
+    armed = sessions[-1] + dt.timedelta(days=1)
+    sig = e.signal(hist, armed)
+    direct = VolatilityRegimeGate()(hist, armed)
+    if direct is None:
+        assert sig.levels is None
+    else:
+        assert sig.levels.entry_trigger == direct.entry_trigger
+        assert sig.levels.initial_stop == direct.initial_stop
+
+
+def test_position_is_replayed_not_stored(ds):
+    """Two independent replays must agree; a stored position could not be checked."""
+    from engine import Engine, replay_position
+
+    e = Engine()
+    a = replay_position(ds, e)
+    b = replay_position(ds, e)
+    assert (a is None) == (b is None)
+    if a is not None:
+        assert a.entry_ts == b.entry_ts and a.stop == b.stop
+
+
+def test_holding_signal_never_arms_a_new_entry(ds):
+    """No pyramiding: while holding, the engine emits exits only."""
+    import datetime as dt
+
+    import pandas as pd
+
+    from engine import Engine, State
+    from fills import Position
+
+    sessions = ds.sessions
+    by = {
+        d: g.sort_values("ts").reset_index(drop=True)
+        for d, g in ds.bars.groupby("session_date", sort=True)
+    }
+    e = Engine()
+    hist = [by[s] for s in sessions[-e.lookback_sessions:]]
+    pos = Position(
+        entry_ts=pd.Timestamp(sessions[-2]), entry_price=100.0, stop=95.0,
+        target=None, entry_at_gap=False, entry_ambiguous=False,
+    )
+    sig = e.signal(hist, sessions[-1] + dt.timedelta(days=1), position=pos)
+    assert sig.state is State.HOLDING
+    assert sig.levels is None
+    assert sig.effective_exit >= pos.stop
+
+
+def test_page_says_the_engine_is_unvalidated(ds):
+    from app import app
+
+    with app.test_client() as c:
+        html = c.get("/levels?symbol=SYNTH3X").data.decode()
+    assert "실행 실패" not in html
+    assert "검증되지 않은 규칙" in html
+    assert "SURFER-ENGINE-" in html

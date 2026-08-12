@@ -13,8 +13,9 @@ import json
 import pytest
 
 from loaders import load_synthetic
-from windows import (LOCK_FILE, SELECTION_END, WindowLocked, describe_windows,
-                     selection_slice, unlock_validation, validation_slice)
+from windows import (LOCK_FILE, SELECTION_USED_FROM, WindowLocked,
+                     describe_windows, selection_slice, unlock_validation,
+                     validation_slice)
 
 
 @pytest.fixture(autouse=True)
@@ -32,14 +33,16 @@ def clean_lock():
 
 @pytest.fixture(scope="module")
 def spanning():
-    """Data straddling the selection/validation boundary."""
-    return load_synthetic(n_sessions=600, start="2018-06-01")
+    """Data straddling the boundary, which §12.4 reversed: selection is
+    2024-08-01 onward, validation is everything before it."""
+    return load_synthetic(n_sessions=900, start="2022-01-03")
 
 
 def test_selection_window_is_always_available(spanning):
+    """Selection = sessions already spent choosing candidate D (2024-08 onward)."""
     sel = selection_slice(spanning)
     assert sel.sessions
-    assert all(d <= SELECTION_END for d in sel.sessions)
+    assert all(d >= SELECTION_USED_FROM for d in sel.sessions)
 
 
 def test_lock_state_matches_the_repeal_flag(spanning):
@@ -53,7 +56,7 @@ def test_lock_state_matches_the_repeal_flag(spanning):
 
     if SPLIT_REPEALED:
         val = validation_slice(spanning)
-        assert all(d > SELECTION_END for d in val.sessions)
+        assert all(d < SELECTION_USED_FROM for d in val.sessions)
     else:
         with pytest.raises(WindowLocked):
             validation_slice(spanning)
@@ -71,7 +74,7 @@ def test_unlock_then_validation_opens(spanning):
     unlock_validation("B", note="선택 구간에서 B가 두 조건 모두 통과")
     val = validation_slice(spanning)
     assert val.sessions
-    assert all(d > SELECTION_END for d in val.sessions)
+    assert all(d < SELECTION_USED_FROM for d in val.sessions)
     rec = json.loads(LOCK_FILE.read_text())
     assert rec["chosen_candidate"] == "B"
     assert rec["note"]
@@ -91,21 +94,16 @@ def test_windows_together_cover_every_session(spanning):
     assert not (set(sel.sessions) & set(val.sessions))
 
 
-def test_describe_reports_the_absence_of_out_of_sample_evidence():
-    """With §3.3 repealed the page must say so, plainly.
+def test_describe_flags_a_feed_with_no_out_of_sample_sessions():
+    """The free yfinance window is entirely selection data (2024-08 onward).
 
-    A comparison table reads like validation. When nothing is held back, the
-    status line is the only thing standing between the reader and that reading.
+    §2.2R cannot run on it at all, and the status line has to say so — a signal
+    page reads as authoritative whether or not anything was held back.
     """
-    from windows import SPLIT_REPEALED
-
     ds = load_synthetic(n_sessions=200, start="2024-08-01")
     text = describe_windows(ds)
-    if SPLIT_REPEALED:
-        assert "SPLIT REPEALED" in text
-        assert "out-of-sample evidence       : NONE" in text
-    else:
-        assert "LOCKED" in text and "WARNING" in text
+    assert "LOCKED" in text
+    assert "no out-of-sample sessions" in text
 
 
 # --- loader interval guard ------------------------------------------------

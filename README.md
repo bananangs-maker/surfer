@@ -93,12 +93,14 @@ aggregate.py      60m -> daily, for the resolution comparison
 diagnostics.py    resolution comparison; purchase case
 backtest.py       session mark-to-market, costs, buy-and-hold, DES-002 verdict
 chart.py          annotated candlestick SVG, monochrome
-board.py          today's levels for every candidate, side by side
+board.py          today's signal (single engine) + candidate board
+engine.py         SURFER-ENGINE-v1.0.0 - the unified rule
+regimes.py        §2.2R regime split. REPORTING ONLY, never a trading input
 windows.py        mechanical lock on the validation window
-app.py            web viewer: / diagnostic, /levels, /backtest
-report_template.html, backtest.html, levels_board.html
+app.py            web viewer: / diagnostic, /levels, /compare, /backtest
+report_template.html, backtest.html, levels_board.html, compare.html
 run_diagnostic.py CLI
-test_*.py         86 tests
+test_*.py         103 tests
 SURFER-DES-001.md pre-registration, use 1 (ON HOLD)
 SURFER-DES-002.md pre-registration, use 2 (ACTIVE)
 ```
@@ -231,3 +233,49 @@ The page also emits a paste-able worksheet for paper execution, with
 `actual_fill` and `filled_yn` left blank. Those columns are the input to the
 DES-002 §8 execution falsifier, which is measurable now, without any purchased
 history — and a failure there stops the data purchase.
+
+
+## The engine
+
+`SURFER-ENGINE-v1.0.0` — candidate D, unified per DES-002 §12.5.
+
+    entry   prior-session-high breakout, gated off when the instrument's own
+            60-minute ATR is at or above its 252-session 80th percentile
+    exit    structural: prior session low - 0.25 ATR, ratcheted
+    stop    fixed at entry; effective exit is the higher of the two
+    cadence once daily, before the open, as resting orders
+
+Chosen because on TQQQ over 730 sessions it was the only candidate to pass the
+drawdown condition — halving A's drawdown (-58.4% → -28.7%) and turning its CAGR
+positive (-13.3% → +4.0%) on an identical entry rule. A, B and C failed both.
+
+**It is not validated.** The window that selected it has no decline and no
+recovery, and a volatility gate's known failure mode is blocking entry during the
+high-volatility early phase of a recovery — a cost that cannot appear in a sample
+without one. `/levels` says this on every load.
+
+### Why §2.2 was replaced
+
+The original Calmar-multiple criterion turned out to be unsatisfiable: the only
+way to pass the drawdown condition is to cut exposure, and cutting exposure in a
+window where buy-and-hold compounds at 55% makes the Calmar multiple unreachable.
+The two conditions contradicted each other. In a falling window the same
+criterion inverts, because a negative baseline Calmar makes the multiple
+meaningless.
+
+`§2.2R` splits by regime instead: drawdown suppression is judged in DECLINE,
+participation in RECOVERY, and the whole curve must simply not lose money. The
+gate's benefit and its cost live in different regimes and cancel when averaged —
+which is precisely why the 2024-2026 window made it look unambiguously good.
+
+`regimes.py` labels sessions from the **benchmark** curve, and uses running peaks
+and troughs, so a label depends on what happened afterwards. It is reporting
+machinery only; a test asserts `engine.py` cannot import it.
+
+### The split came back on its own
+
+§3.3 was repealed to allow selection on the available window, then restored with
+its boundary reversed: candidate D was chosen on 2024-08 onward, so everything
+before that is untouched and is genuine out-of-sample. The cost of the repeal
+turned out to be nothing — but only because the choice happened to be made on the
+recent end.
