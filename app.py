@@ -209,6 +209,50 @@ def backtest_view():
     return render_template("backtest.html", **ctx)
 
 
+@app.route("/validate")
+def validate_view():
+    """§2.2R on out-of-sample data — or an explanation of why it cannot run.
+
+    Deliberately reports MEASURABILITY before any verdict. A window with no
+    decline passes two of three conditions by vacuity, and two PASSes on a page
+    read as validation whether or not anything was tested.
+    """
+    symbol = request.args.get("symbol", "SYNTH3X").upper()
+    if symbol not in SYMBOLS:
+        symbol = "SYNTH3X"
+    ctx = {"symbols": SYMBOLS, "symbol": symbol, "cov": None, "v": None,
+           "blocked": None, "error": None, "windows": None}
+    try:
+        from engine import Engine
+        from regimes import coverage, verdict_2_2R
+        from windows import (MIN_SESSIONS_FOR_ENGINE, WindowLocked,
+                             describe_windows, validation_slice)
+
+        ds = get_dataset(symbol)
+        ctx["windows"] = describe_windows(ds)
+        from regimes import Regime
+        ctx["REG"] = Regime
+        try:
+            oos = validation_slice(ds)
+        except WindowLocked as e:
+            ctx["blocked"] = str(e)
+            return render_template("validate.html", **ctx)
+
+        bh = buy_and_hold(oos, costs=Costs())
+        cov = coverage(bh, min_sessions_needed=MIN_SESSIONS_FOR_ENGINE)
+        ctx["cov"] = cov
+        if cov.measurable:
+            res = run_backtest(oos, Engine().entry, exit_rule=Engine().exit_rule,
+                               costs=Costs(), acknowledge_quarantine=True)
+            ctx["v"] = verdict_2_2R(res.equity, bh)
+            ctx["res"] = res
+    except Exception as e:
+        import traceback
+        ctx["error"] = f"{type(e).__name__}: {e}"
+        ctx["trace"] = traceback.format_exc()
+    return render_template("validate.html", **ctx)
+
+
 @app.route("/compare")
 def compare_view():
     """All four candidates, one run, DES-002 §6 applied to each.

@@ -104,3 +104,39 @@ def test_engine_cannot_import_regimes():
 
     src = pathlib.Path(__file__).with_name("engine.py").read_text()
     assert "regimes" not in src
+
+
+# --- measurability gate ---------------------------------------------------
+
+def test_coverage_rejects_a_window_with_no_decline():
+    from regimes import coverage
+
+    rising = curve([100 + i for i in range(400)])
+    cov = coverage(rising)
+    assert cov.has_decline is False
+    assert cov.measurable is False
+
+
+def test_coverage_rejects_a_window_too_short_for_the_engine(benchmark):
+    """222 out-of-sample sessions was the real case.
+
+    The gate needs 284 sessions before its percentile window matches §4.1. A
+    shorter slice tops out below 252 readings, so it runs a DIFFERENT rule — and
+    relaxing the spec in order to validate is what pre-registration forbids.
+    """
+    from regimes import coverage
+
+    short = benchmark[:222]
+    cov = coverage(short, min_sessions_needed=284)
+    assert cov.engine_ready is False
+    assert cov.measurable is False
+    assert "cannot be judged" in cov.render()
+
+
+def test_coverage_accepts_a_window_with_all_three(benchmark):
+    from regimes import coverage
+
+    long_enough = benchmark + benchmark          # >= 284 sessions
+    cov = coverage(long_enough, min_sessions_needed=284)
+    assert cov.has_decline and cov.has_recovery and cov.engine_ready
+    assert cov.measurable is True

@@ -49,9 +49,23 @@ SELECTION_END = date(2019, 12, 31)
 # back on its own once the choice was made, with the boundary reversed.
 SPLIT_REPEALED = False
 
-# §12.4: the sessions already spent on selection. Anything outside this is
-# out-of-sample and is reserved for the §2.2R verdict.
+# §12.4 (corrected 2026-08-12). An earlier value of 2024-08-01 was wrong: the
+# candidate comparison that chose D ran on the WHOLE 730-day yfinance feed, not
+# on its recent half. Everything the free feed contains is therefore spent, and
+# the 222 sessions this boundary had classified as out-of-sample were not.
 SELECTION_USED_FROM = date(2024, 8, 1)
+
+# The whole free feed was consumed by selection. Out-of-sample evidence must
+# come from a source that reaches further back than 730 days.
+FREE_FEED_FULLY_SPENT = True
+FREE_FEED_SOURCES = ("yfinance",)
+
+# Second, independent reason the free feed cannot serve as validation: the engine
+# needs 284 sessions of history (252-session percentile + 12-bar ATR + 20 warm-up)
+# before its gate matches the pre-registered spec. A 222-session slice tops out at
+# 202 readings, so the gate would be running a DIFFERENT rule than §4.1 defines -
+# and relaxing the spec in order to validate is what pre-registration forbids.
+MIN_SESSIONS_FOR_ENGINE = 284
 REPEAL_NOTE = (
     "§3.3 폐기 2026-08-12 (사용자 결정). 야후 730일 구간에서 후보를 선택함. "
     "표본 외 검증 없음 — 선택된 후보는 상승 구간 2년에 맞춰진 것이며, "
@@ -142,6 +156,17 @@ def validation_slice(ds: Dataset) -> Dataset:
     and 2022, which is where a volatility gate's cost would appear if it has one.
     Spending it casually leaves nothing.
     """
+    if FREE_FEED_FULLY_SPENT and any(
+        src in ds.source for src in FREE_FEED_SOURCES
+    ):
+        raise WindowLocked(
+            f"{ds.source} cannot supply out-of-sample evidence.\n"
+            "The candidate comparison that selected D ran on this entire feed, so "
+            "every session in it is spent. And at 730 days the feed is shorter "
+            f"than the {MIN_SESSIONS_FOR_ENGINE} sessions the engine needs before "
+            "its gate matches §4.1 — a shorter slice runs a different rule.\n"
+            "§2.2R needs purchased history (FirstRate, pre-2023)."
+        )
     if SPLIT_REPEALED:
         return _slice(ds, lambda d: d < SELECTION_USED_FROM)
     rec = Unlock.load()
@@ -175,10 +200,18 @@ def describe_windows(ds: Dataset) -> str:
             f"  validation status            : unlocked {rec.unlocked_at} "
             f"for candidate {rec.chosen_candidate}"
         )
-    if n_val == 0:
+    spent = FREE_FEED_FULLY_SPENT and any(
+        src in ds.source for src in FREE_FEED_SOURCES
+    )
+    if spent:
+        lines = [
+            f"  sessions available          : {len(ds.sessions):5}",
+            "  out-of-sample               :     0  (whole feed spent on selection)",
+            f"  engine needs                : {MIN_SESSIONS_FOR_ENGINE:5} sessions for a §4.1-spec gate",
+        ]
+    if n_val == 0 and not spent:
         lines.append(
-            "  NOTE: no out-of-sample sessions in this feed. The 730-day yfinance "
-            "window is entirely selection data; §2.2R needs pre-2024 history."
+            "  NOTE: no out-of-sample sessions in this feed."
         )
     if len(sel.sessions) == 0 and not SPLIT_REPEALED:
         lines.append(

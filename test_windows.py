@@ -164,3 +164,42 @@ def test_unknown_adjustment_is_rejected(tmp_path):
     with pytest.raises(ValueError):
         load_firstrate_csv(_firstrate_file(tmp_path, 60), "TQQQ",
                            adjustment=Adjustment.UNKNOWN)
+
+
+# --- the free feed cannot validate (§12.4 correction) ---------------------
+
+def test_free_feed_is_refused_as_out_of_sample():
+    """Corrects a boundary error.
+
+    SELECTION_USED_FROM had been set to 2024-08-01, which classified 222 earlier
+    sessions as out-of-sample. But the comparison that chose candidate D ran on
+    the WHOLE 730-day feed, so those sessions were spent too. Two independent
+    reasons now block the feed, and both are stated in the error.
+    """
+    from schema import Dataset
+    from windows import FREE_FEED_FULLY_SPENT, MIN_SESSIONS_FOR_ENGINE
+
+    assert FREE_FEED_FULLY_SPENT is True
+    base = load_synthetic(n_sessions=900, start="2022-01-03")
+    feed = Dataset(
+        bars=base.bars, symbol="TQQQ", source="yfinance", interval_minutes=60,
+        adjustment=base.adjustment, quarantined=True, quarantine_reason="x",
+    )
+    with pytest.raises(WindowLocked) as e:
+        validation_slice(feed)
+    msg = str(e.value)
+    assert "spent" in msg
+    assert str(MIN_SESSIONS_FOR_ENGINE) in msg
+
+
+def test_describe_reports_zero_out_of_sample_for_the_free_feed():
+    from schema import Dataset
+
+    base = load_synthetic(n_sessions=730, start="2023-09-15")
+    feed = Dataset(
+        bars=base.bars, symbol="TQQQ", source="yfinance", interval_minutes=60,
+        adjustment=base.adjustment, quarantined=True, quarantine_reason="x",
+    )
+    text = describe_windows(feed)
+    assert "whole feed spent on selection" in text
+    assert "284" in text

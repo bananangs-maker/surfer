@@ -190,3 +190,65 @@ def verdict_2_2R(
             "판정 불가 — 표본에 하락 또는 회복 국면이 없음"
         ),
     }
+
+
+@dataclass
+class Coverage:
+    """Whether a window can answer §2.2R at all.
+
+    Asked before a verdict is attempted, because a window with no decline returns
+    "PASS" on two of three conditions by vacuity — and a page showing two PASSes
+    reads as validation.
+    """
+
+    sessions: int
+    counts: dict
+    deepest_drawdown: float
+    has_decline: bool
+    has_recovery: bool
+    engine_ready: bool
+    min_sessions_needed: int
+
+    @property
+    def measurable(self) -> bool:
+        return self.has_decline and self.has_recovery and self.engine_ready
+
+    def render(self) -> str:
+        lines = [
+            "REGIME COVERAGE (§2.2R measurability)",
+            f"  sessions                : {self.sessions}",
+            f"  deepest benchmark DD    : {self.deepest_drawdown:.1%}",
+            f"  ADVANCE / DECLINE / RECOVERY : "
+            f"{self.counts.get(Regime.ADVANCE, 0)} / "
+            f"{self.counts.get(Regime.DECLINE, 0)} / "
+            f"{self.counts.get(Regime.RECOVERY, 0)}",
+            f"  has DECLINE             : {self.has_decline}",
+            f"  has RECOVERY            : {self.has_recovery}",
+            f"  engine-spec history     : {self.engine_ready} "
+            f"(needs {self.min_sessions_needed})",
+            f"  MEASURABLE              : {self.measurable}",
+        ]
+        if not self.measurable:
+            lines.append("  -> §2.2R cannot be judged on this window.")
+        return "\n".join(lines)
+
+
+def coverage(
+    bh_curve: list[tuple[date, float]], min_sessions_needed: int = 284
+) -> Coverage:
+    from collections import Counter
+
+    labs = label(bh_curve)
+    vals = np.array([v for _, v in bh_curve], dtype=float)
+    peak = np.maximum.accumulate(vals) if len(vals) else np.array([1.0])
+    dd = float((vals / peak - 1.0).min()) if len(vals) else 0.0
+    counts = dict(Counter(labs))
+    return Coverage(
+        sessions=len(bh_curve),
+        counts=counts,
+        deepest_drawdown=dd,
+        has_decline=counts.get(Regime.DECLINE, 0) > 0,
+        has_recovery=counts.get(Regime.RECOVERY, 0) > 0,
+        engine_ready=len(bh_curve) >= min_sessions_needed,
+        min_sessions_needed=min_sessions_needed,
+    )
