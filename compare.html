@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SURFER · 후보 비교{% if symbol %} · {{ symbol }}{% endif %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDEDEB; --panel:#FFFFFF; --ink:#111111;
+    --zone-1:#D9D9D7; --zone-2:#C4C4C2; --muted:#8A8A88;
+    --hair:rgba(17,17,17,.22); --hair-soft:rgba(17,17,17,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Barlow',system-ui,sans-serif; font-size:16px; line-height:1.55}
+  .wrap{max-width:1120px; margin:0 auto; padding:32px 20px 96px}
+  .cartouche{border:1px solid var(--ink); background:var(--panel); padding:22px 24px; margin-bottom:24px}
+  .cartouche-top{display:flex; flex-wrap:wrap; gap:6px 18px; align-items:baseline;
+    border-bottom:1px solid var(--hair); padding-bottom:14px; margin-bottom:14px}
+  .mark{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:38px;
+    letter-spacing:.22em; text-transform:uppercase; line-height:1}
+  .mark-sub{font-family:'Barlow Condensed',sans-serif; font-weight:500; font-size:15px;
+    letter-spacing:.26em; text-transform:uppercase; color:var(--muted)}
+  .field-label{font-family:'Barlow Condensed',sans-serif; font-size:12px; letter-spacing:.02em;
+    text-transform:uppercase; color:var(--muted); display:block; margin-bottom:2px}
+  .field-value{font-family:'IBM Plex Mono',monospace; font-size:14px}
+  .hydro{font-style:italic; color:var(--muted)}
+  pre.win{font-family:'IBM Plex Mono',monospace; font-size:12.5px; margin:0;
+    background:var(--zone-1); padding:12px; border:1px solid var(--hair);
+    white-space:pre-wrap; word-break:break-word}
+  .notice{border:1px solid var(--ink); border-left-width:6px; background:var(--panel);
+    padding:16px 20px; margin-bottom:24px}
+  .notice-tag{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px;
+    letter-spacing:.02em; text-transform:uppercase; display:block; margin-bottom:6px}
+  .notice p{margin:0 0 8px} .notice p:last-child{margin:0}
+  .band{margin:0 0 30px}
+  .band-head{display:flex; align-items:baseline; gap:14px; border-bottom:1.5px solid var(--ink);
+    padding-bottom:7px; margin-bottom:18px}
+  .band-title{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:20px;
+    letter-spacing:.02em; text-transform:uppercase; margin:0}
+  .band-note{font-size:14px; color:var(--muted); font-style:italic}
+  .controls{border:1px solid var(--ink); background:var(--panel); padding:18px 20px;
+    margin-bottom:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+    gap:14px 18px; align-items:end}
+  select{width:100%; font-family:'IBM Plex Mono',monospace; font-size:15px; padding:8px 10px;
+    border:1px solid var(--ink); background:var(--panel); color:var(--ink); border-radius:0}
+  button{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:15px;
+    letter-spacing:.02em; text-transform:uppercase; padding:10px 22px;
+    border:1.5px solid var(--ink); background:var(--ink); color:var(--panel);
+    cursor:pointer; border-radius:0}
+  button:hover{background:var(--panel); color:var(--ink)}
+  a{color:var(--ink)}
+  a:focus-visible,button:focus-visible,select:focus-visible{outline:2.5px solid var(--ink); outline-offset:2px}
+  .grid{width:100%; border-collapse:collapse; font-size:15px; background:var(--panel)}
+  .grid th,.grid td{padding:10px 12px; border-bottom:1px solid var(--hair-soft); text-align:right}
+  .grid th:first-child,.grid td:first-child{text-align:left}
+  .grid thead th{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:12px;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+    border-bottom:1.5px solid var(--ink)}
+  .grid td.num{font-family:'IBM Plex Mono',monospace}
+  .grid tr.bh td{background:var(--zone-1); font-weight:500}
+  .cand{font-family:'IBM Plex Mono',monospace; font-weight:600; border:1.4px solid var(--ink);
+    display:inline-flex; width:24px; height:24px; align-items:center; justify-content:center;
+    margin-right:8px; font-size:13px}
+  .chip{font-family:'Barlow Condensed',sans-serif; font-size:11.5px; letter-spacing:.06em;
+    text-transform:uppercase; border:1.4px solid var(--ink); padding:2px 9px; white-space:nowrap}
+  .chip-solid{background:var(--ink); color:var(--panel)}
+  .foot{margin-top:36px; padding-top:16px; border-top:1px solid var(--hair);
+    font-size:14px; color:var(--muted)}
+  .err pre{font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--zone-1);
+    padding:12px; overflow-x:auto}
+  .scroll{overflow-x:auto; border:1px solid var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="cartouche">
+    <div class="cartouche-top">
+      <span class="mark">Surfer</span>
+      <span class="mark-sub">Candidate Comparison</span>
+    </div>
+    {% if windows %}
+    <div><span class="field-label">구간 상태</span><pre class="win">{{ windows }}</pre></div>
+    {% endif %}
+    <p style="margin:14px 0 0"><a href="/">모호율 진단</a> · <a href="/levels">오늘의 레벨</a> · <a href="/backtest">단일 백테스트</a></p>
+  </header>
+
+  <form class="controls" method="get" action="/compare">
+    <label>
+      <span class="field-label">종목</span>
+      <select name="symbol">
+        {% for s in symbols %}<option value="{{ s }}" {% if s==symbol %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit">네 후보 비교</button>
+  </form>
+
+  {% if repeal_note %}
+  <div class="notice">
+    <span class="notice-tag">표본 내 비교 — 검증이 아닙니다</span>
+    <p>{{ repeal_note }}</p>
+    <p>이 표에서 이기는 후보는 <strong>이 구간에 가장 잘 맞은 규칙</strong>입니다.
+    그 적합이 다른 국면에서도 유지되는지 시험할 데이터를 남겨두지 않았으므로,
+    여기서 PASS가 나와도 검증된 것이 아닙니다.</p>
+    <p class="hydro">2019년 이전 데이터를 확보하면 <code>windows.py</code>의
+    <code>SPLIT_REPEALED</code>를 <code>False</code>로 되돌려 표본 외 검증을 복원할 수
+    있습니다.</p>
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="notice err">
+    <span class="notice-tag">실행 실패</span>
+    <p><strong>{{ error }}</strong></p>
+    <pre>{{ trace }}</pre>
+  </div>
+  {% elif rows %}
+
+  <section class="band">
+    <div class="band-head">
+      <h2 class="band-title">DES-002 §2.2 · §2.3 적용</h2>
+      <span class="band-note">칼마 1.5배 · 낙폭 절반 — 둘 다 통과해야 채택</span>
+    </div>
+    <div class="scroll">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>후보</th><th>칼마</th><th>CAGR</th><th>최대낙폭</th>
+          <th>거래</th><th>노출</th><th>모호</th><th>§2.2</th><th>§2.3</th><th>판정</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td><span class="cand">{{ r.key }}</span>{{ r.label }}</td>
+          <td class="num">{{ '%.2f'|format(r.v.surfer.calmar) }}</td>
+          <td class="num">{{ '%.1f'|format(r.v.surfer.cagr*100) }}%</td>
+          <td class="num">{{ '%.1f'|format(r.v.surfer.max_drawdown*100) }}%</td>
+          <td class="num">{{ r.n }}</td>
+          <td class="num">{{ '%.0f'|format(r.exposure*100) }}%</td>
+          <td class="num">{{ '%.0f'|format(r.amb*100) }}%</td>
+          <td><span class="chip {{ '' if r.v.calmar_pass else 'chip-solid' }}">{{ 'PASS' if r.v.calmar_pass else 'FAIL' }}</span></td>
+          <td><span class="chip {{ '' if r.v.mdd_pass else 'chip-solid' }}">{{ 'PASS' if r.v.mdd_pass else 'FAIL' }}</span></td>
+          <td>
+            {% if r.amb_void %}<span class="chip chip-solid">무효</span>
+            {% else %}<span class="chip {{ '' if r.v.pass else 'chip-solid' }}">{{ 'PASS' if r.v.pass else 'FAIL' }}</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        <tr class="bh">
+          <td>바이앤홀드 (기준선)</td>
+          <td class="num">{{ '%.2f'|format(bh.calmar) }}</td>
+          <td class="num">{{ '%.1f'|format(bh.cagr*100) }}%</td>
+          <td class="num">{{ '%.1f'|format(bh.max_drawdown*100) }}%</td>
+          <td class="num">1</td><td class="num">100%</td><td class="num">—</td>
+          <td colspan="3" class="num">필요: 칼마 ≥ {{ '%.2f'|format(bh.calmar*1.5 if bh.calmar>0 else 0) }}{{ ' (그리고 0 초과)' }} · 낙폭 ≥ {{ '%.1f'|format(bh.max_drawdown*50) }}%</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="band-note" style="display:block; margin-top:14px">
+      「모호」가 40%를 넘으면 §6에 따라 <strong>판정 자체가 무효</strong>입니다 —
+      손익이 봉 데이터로 관측할 수 없는 인트라바 순서에 의존한다는 뜻이므로,
+      PASS든 FAIL든 그 결과를 근거로 쓸 수 없습니다.
+    </p>
+    <p class="band-note" style="display:block">
+      「노출」은 포지션을 보유한 세션의 비율입니다. 낙폭을 줄이는 유일한 경로가
+      노출 축소이므로, §2.3을 통과하는 후보는 노출이 낮게 나오는 것이 정상입니다.
+    </p>
+  </section>
+
+  {% endif %}
+
+  <p class="foot">
+    레벨 산출기가 후보 상태인 동안 나오는 수치는 그 후보를 측정한 것입니다.
+    이 화면은 주문을 넣지 않고 증권사 인증정보를 갖고 있지 않습니다.
+  </p>
+</div>
+</body>
+</html>

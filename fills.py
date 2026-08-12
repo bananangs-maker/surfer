@@ -126,32 +126,37 @@ def _walk_hold(
     level = pos.effective_stop
     kind = Kind.STRUCTURAL if pos.exit_is_structural else Kind.STOP
 
-    for _, bar in bars.iterrows():
-        o, h, l = float(bar["open"]), float(bar["high"]), float(bar["low"])
+    O, Hi, Lo, TS = _arrays(bars)
+    for i in range(len(bars)):
+        # float()/pd.Timestamp() keep numpy scalars out of Fill. Without this,
+        # at_gap became np.False_ - equal to False but not identical to it, which
+        # silently breaks `is False` checks downstream.
+        o, h, l = float(O[i]), float(Hi[i]), float(Lo[i])
+        ts = pd.Timestamp(TS[i])
 
         stop_hit = l <= level
         tgt_hit = pos.target is not None and h >= pos.target
         if stop_hit and tgt_hit:
             out.ambiguous_bars += 1
             at_gap = o <= level
-            out.exit = Fill(kind, bar["ts"], o if at_gap else level, at_gap, True)
+            out.exit = Fill(kind, ts, o if at_gap else level, at_gap, True)
             out.notes.append(
-                f"{bar['ts']}: exit level and target both inside bar -> exit assumed"
+                f"{ts}: exit level and target both inside bar -> exit assumed"
             )
             return out
         if stop_hit:
             at_gap = o <= level
-            out.exit = Fill(kind, bar["ts"], o if at_gap else level, at_gap, False)
+            out.exit = Fill(kind, ts, o if at_gap else level, at_gap, False)
             if at_gap:
                 out.notes.append(
-                    f"{bar['ts']}: held position gapped through {kind.value} "
+                    f"{ts}: held position gapped through {kind.value} "
                     f"({o:.4f} vs {level:.4f})"
                 )
             return out
         if tgt_hit:
             at_gap = o >= pos.target
             out.exit = Fill(
-                Kind.TARGET, bar["ts"], o if at_gap else pos.target, at_gap, False
+                Kind.TARGET, ts, o if at_gap else pos.target, at_gap, False
             )
             return out
 
@@ -161,11 +166,25 @@ def _walk_hold(
     return out
 
 
-def _count_ambiguity(bar: pd.Series, levels: LevelSet, in_position: bool) -> int:
+def _count_ambiguity(lo: float, hi: float, levels: LevelSet, in_position: bool) -> int:
     """How many actionable levels lie inside this bar's range."""
-    lo, hi = float(bar["low"]), float(bar["high"])
     prices = levels.actionable_prices(in_position=in_position)
     return sum(1 for p in prices.values() if lo <= p <= hi)
+
+
+def _arrays(bars: pd.DataFrame):
+    """Column arrays once per session instead of a Series per bar.
+
+    iterrows() builds a fresh pandas Series for every bar, and with four
+    candidates over 730 sessions that construction cost dominated the run. The
+    loop bodies below are unchanged in logic - only the access pattern differs.
+    """
+    return (
+        bars["open"].to_numpy(dtype=float),
+        bars["high"].to_numpy(dtype=float),
+        bars["low"].to_numpy(dtype=float),
+        bars["ts"].to_numpy(),
+    )
 
 
 def adjudicate_session(
@@ -207,9 +226,12 @@ def adjudicate_session(
     in_position = False
     triggered_ever = False
 
-    for _, bar in bars.iterrows():
-        o, h, l = float(bar["open"]), float(bar["high"]), float(bar["low"])
-        n_amb = _count_ambiguity(bar, levels, in_position)
+    O, Hi, Lo, TS = _arrays(bars)
+    for i in range(len(bars)):
+        # See _walk_hold: numpy scalars must not escape into Fill.
+        o, h, l = float(O[i]), float(Hi[i]), float(Lo[i])
+        ts = pd.Timestamp(TS[i])
+        n_amb = _count_ambiguity(l, h, levels, in_position)
         bar_ambiguous = n_amb >= 2
         if bar_ambiguous:
             out.ambiguous_bars += 1
@@ -227,7 +249,7 @@ def adjudicate_session(
                         fill_px, at_gap = levels.entry_limit, True   # gapped past, came back
                     else:
                         out.notes.append(
-                            f"{bar['ts']}: gapped through ceiling "
+                            f"{ts}: gapped through ceiling "
                             f"(open {o:.4f} > limit {levels.entry_limit:.4f}), no fill"
                         )
                         continue
@@ -245,7 +267,7 @@ def adjudicate_session(
                         fill_px, at_gap = o, True
                     else:
                         out.notes.append(
-                            f"{bar['ts']}: gapped through floor "
+                            f"{ts}: gapped through floor "
                             f"(open {o:.4f} < limit {levels.entry_limit:.4f}), "
                             "structure broken, no fill"
                         )
@@ -253,10 +275,10 @@ def adjudicate_session(
                 else:
                     fill_px, at_gap = levels.entry_trigger, False
 
-            out.entry = Fill(Kind.ENTRY, bar["ts"], fill_px, at_gap, bar_ambiguous)
+            out.entry = Fill(Kind.ENTRY, ts, fill_px, at_gap, bar_ambiguous)
             in_position = True
             live = Position(
-                entry_ts=bar["ts"], entry_price=fill_px, stop=levels.initial_stop,
+                entry_ts=ts, entry_price=fill_px, stop=levels.initial_stop,
                 target=levels.target, entry_at_gap=at_gap,
                 entry_ambiguous=bar_ambiguous,
             )
@@ -269,11 +291,11 @@ def adjudicate_session(
                     if o <= levels.initial_stop else levels.initial_stop
                 )
                 out.exit = Fill(
-                    Kind.STOP, bar["ts"], exit_px,
+                    Kind.STOP, ts, exit_px,
                     at_gap=(o <= levels.initial_stop), ambiguous=True,
                 )
                 out.notes.append(
-                    f"{bar['ts']}: entry and stop both inside bar -> adverse "
+                    f"{ts}: entry and stop both inside bar -> adverse "
                     "ordering applied (filled, then stopped)"
                 )
                 if not bar_ambiguous:
@@ -288,24 +310,24 @@ def adjudicate_session(
         if stop_hit and tgt_hit:
             # RULE 1 again: adverse ordering is stop first.
             exit_px = min(o, levels.initial_stop) if o <= levels.initial_stop else levels.initial_stop
-            out.exit = Fill(Kind.STOP, bar["ts"], exit_px, o <= levels.initial_stop, True)
-            out.notes.append(f"{bar['ts']}: stop and target both inside bar -> stop assumed")
+            out.exit = Fill(Kind.STOP, ts, exit_px, o <= levels.initial_stop, True)
+            out.notes.append(f"{ts}: stop and target both inside bar -> stop assumed")
             return out
         if stop_hit:
             # RULE 2: plain stop fills through the gap, at the gap price.
             at_gap = o <= levels.initial_stop
             exit_px = o if at_gap else levels.initial_stop
-            out.exit = Fill(Kind.STOP, bar["ts"], exit_px, at_gap, bar_ambiguous)
+            out.exit = Fill(Kind.STOP, ts, exit_px, at_gap, bar_ambiguous)
             if at_gap:
                 out.notes.append(
-                    f"{bar['ts']}: stop gapped through "
+                    f"{ts}: stop gapped through "
                     f"({o:.4f} vs stop {levels.initial_stop:.4f})"
                 )
             return out
         if tgt_hit:
             at_gap = o >= levels.target
             exit_px = o if at_gap else levels.target
-            out.exit = Fill(Kind.TARGET, bar["ts"], exit_px, at_gap, bar_ambiguous)
+            out.exit = Fill(Kind.TARGET, ts, exit_px, at_gap, bar_ambiguous)
             return out
 
     if in_position:

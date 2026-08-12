@@ -1,4 +1,17 @@
-"""Window lock for SURFER-DES-002 §3.3.
+"""Window lock for SURFER-DES-002 §3.3 — REPEALED 2026-08-12.
+
+The user repealed the selection/validation split in order to choose a candidate
+on the data currently available (yfinance, 730 days, 2024-08 to 2026-08).
+
+CONSEQUENCE, recorded here rather than argued: after this, NO OUT-OF-SAMPLE
+EVIDENCE EXISTS. The chosen candidate will be the one that fitted a two-year
+window in which the underlying mostly rose, and nothing remains to test whether
+that fit generalises. Any later claim that SURFER was validated must be read
+against this note.
+
+The machinery is kept, not deleted, so the split can be restored once
+selection-window data is purchased — and so this decision stays visible in the
+file rather than vanishing from the repository.
 
 The document says the validation window is not opened until candidate selection
 is locked. A document cannot enforce that. This module can.
@@ -29,6 +42,15 @@ from schema import BAR_COLUMNS, Dataset
 
 # SURFER-DES-002 §3.3. Selection ends with 2019; validation is everything after.
 SELECTION_END = date(2019, 12, 31)
+
+# Set False to restore the split. While True, validation_slice() does not raise
+# and the app does not restrict any symbol.
+SPLIT_REPEALED = True
+REPEAL_NOTE = (
+    "§3.3 폐기 2026-08-12 (사용자 결정). 야후 730일 구간에서 후보를 선택함. "
+    "표본 외 검증 없음 — 선택된 후보는 상승 구간 2년에 맞춰진 것이며, "
+    "그 적합이 일반화되는지 시험할 데이터가 남아 있지 않음."
+)
 LOCK_FILE = Path(__file__).with_name("VALIDATION_UNLOCKED.json")
 
 
@@ -103,7 +125,9 @@ def selection_slice(ds: Dataset) -> Dataset:
 
 
 def validation_slice(ds: Dataset) -> Dataset:
-    """Sessions after SELECTION_END. Requires an unlock record."""
+    """Sessions after SELECTION_END. Requires an unlock record unless repealed."""
+    if SPLIT_REPEALED:
+        return _slice(ds, lambda d: d > SELECTION_END)
     rec = Unlock.load()
     if rec is None:
         raise WindowLocked(
@@ -125,14 +149,17 @@ def describe_windows(ds: Dataset) -> str:
         f"  selection  (<= {SELECTION_END}) : {len(sel.sessions):5} sessions",
         f"  validation (>  {SELECTION_END}) : {n_val:5} sessions",
     ]
-    if rec is None:
+    if SPLIT_REPEALED:
+        lines.append("  validation status            : SPLIT REPEALED 2026-08-12")
+        lines.append("  out-of-sample evidence       : NONE")
+    elif rec is None:
         lines.append("  validation status            : LOCKED")
     else:
         lines.append(
             f"  validation status            : unlocked {rec.unlocked_at} "
             f"for candidate {rec.chosen_candidate}"
         )
-    if len(sel.sessions) == 0:
+    if len(sel.sessions) == 0 and not SPLIT_REPEALED:
         lines.append(
             "  WARNING: no sessions in the selection window. The current data "
             "source (yfinance, 730 days) lies entirely inside the validation "

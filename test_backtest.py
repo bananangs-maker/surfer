@@ -310,3 +310,88 @@ def test_positive_calmar_is_necessary_even_against_a_weak_baseline():
     flat_bh = curve([10.0] * 252)
     declining = curve([10.0] * 126 + [9.5] * 126)
     assert verdict(declining, flat_bh)["calmar_pass"] is False
+
+
+# --- optimisations that must not change results ---------------------------
+
+def test_atr60_tail_limit_matches_an_unlimited_reference():
+    """atr60 walks only the tail it needs. Verify that is not a behaviour change.
+
+    Before this, atr60 iterated the entire history it was handed and then kept
+    only the last 42 true ranges. Candidate D passes a 284-session window, so it
+    was walking 284 sessions per call to use about six - ten times the cost of
+    the rule it gates.
+    """
+    import numpy as np
+
+    import levels as L
+    from loaders import load_synthetic
+
+    def reference(history, lookback_bars=42, exclude_stubs=True):
+        trs, prev = [], None
+        for sess in history:
+            if len(sess) == 0:
+                continue
+            tr = L.true_range_60m(sess, prev)
+            keep = (~sess["is_stub"].to_numpy() if exclude_stubs
+                    else np.ones(len(sess), bool))
+            trs.extend(tr[keep].tolist())
+            prev = float(sess["close"].iloc[-1])
+        if len(trs) < lookback_bars:
+            return None
+        return float(np.mean(trs[-lookback_bars:]))
+
+    ds = load_synthetic(n_sessions=400)
+    sessions = ds.sessions
+    by = {
+        d: g.sort_values("ts").reset_index(drop=True)
+        for d, g in ds.bars.groupby("session_date", sort=True)
+    }
+    checked = 0
+    for i in range(200, 400, 7):
+        for w in (12, 60, 284):
+            hist = [by[s] for s in sessions[max(0, i - w):i]]
+            a, b = L.atr60(hist), reference(hist)
+            if a is None and b is None:
+                continue
+            checked += 1
+            assert a is not None and b is not None
+            assert abs(a - b) < 1e-12, (sessions[i], w, a, b)
+    assert checked > 50
+
+
+def test_gate_percentile_window_is_actually_252_sessions():
+    """SURFER-DES-002 §4.1 specifies a trailing 252 sessions.
+
+    lookback_sessions was 264, but the 20-session warm-up consumed part of it, so
+    the rolling window was about 244 - the gate ran to a different spec than the
+    document said. Found before any real measurement.
+    """
+    from levels import VolatilityRegimeGate
+
+    g = VolatilityRegimeGate()
+    assert g.lookback_sessions >= g.PERCENTILE_WINDOW + 12 + 20
+
+
+def test_gate_store_is_ordered_by_session_not_insertion():
+    """The trailing-252 slice depends on order.
+
+    The first incremental version inserted the current session before
+    back-filling older ones, so the newest reading sat at position 0 and the slice
+    took the wrong sessions - while still printing a plausible percentile.
+    """
+    from levels import VolatilityRegimeGate
+    from loaders import load_synthetic
+
+    ds = load_synthetic(n_sessions=400)
+    sessions = ds.sessions
+    by = {
+        d: g.sort_values("ts").reset_index(drop=True)
+        for d, g in ds.bars.groupby("session_date", sort=True)
+    }
+    gate = VolatilityRegimeGate()
+    for i in (330, 350, 370):
+        gate.percentile([by[s] for s in sessions[max(0, i - 284):i]])
+    keys = [k for k, _ in gate._ordered]
+    assert keys == sorted(keys)
+    assert len(keys) > 200

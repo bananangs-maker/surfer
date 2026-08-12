@@ -17,12 +17,14 @@ from flask import Flask, render_template, request
 import integrity
 from diagnostics import purchase_case, resolution_comparison
 from backtest import Costs, buy_and_hold, curve_metrics, run_backtest, verdict
+from backtest import _stats as _bt_stats
 import board as board_mod
 from chart import annotated_session_svg, pick_example
 from levels import (PlaceholderBreakout, PriorCloseVolatilityBreakout,
                     PullbackToPriorLow, StructuralExit, VolatilityRegimeGate,
                     stub_range_ratio)
-from windows import SELECTION_END, Unlock, describe_windows, selection_slice
+from windows import (REPEAL_NOTE, SELECTION_END, SPLIT_REPEALED, Unlock,
+                     describe_windows, selection_slice)
 from schema import Dataset
 
 # template_folder="." keeps the HTML at the repo root - no subfolders anywhere.
@@ -169,7 +171,7 @@ def backtest_view():
         # withheld. Blocking the symbol outright (an earlier version of this)
         # made the selection window unreachable too, which is not what §3.3 says.
         ds_used = ds
-        if symbol != "SYNTH3X" and Unlock.load() is None:
+        if (not SPLIT_REPEALED) and symbol != "SYNTH3X" and Unlock.load() is None:
             ds_used = selection_slice(ds)
             n_withheld = len(ds.sessions) - len(ds_used.sessions)
             if len(ds_used.sessions) < 60:
@@ -192,7 +194,7 @@ def backtest_view():
         ctx.update({
             "res": res,
             "v": verdict(res.equity, bh),
-            "trade_stats": __import__("backtest")._stats(res.closed_trades),
+            "trade_stats": _bt_stats(res.closed_trades),
             "amb_share": (
                 sum(1 for t in res.closed_trades if t.ambiguous)
                 / len(res.closed_trades) if res.closed_trades else 0.0
@@ -203,6 +205,51 @@ def backtest_view():
         ctx["error"] = f"{type(e).__name__}: {e}"
         ctx["trace"] = traceback.format_exc()
     return render_template("backtest.html", **ctx)
+
+
+@app.route("/compare")
+def compare_view():
+    """All four candidates, one run, DES-002 §6 applied to each.
+
+    §3.3 was repealed, so this runs on whatever window the feed provides. That
+    makes the comparison an IN-SAMPLE one: the winner is the rule that best fitted
+    this window, and no data is being held back to test whether the fit holds.
+    The page says so, because a table of verdicts reads like validation and this
+    one is not.
+    """
+    symbol = request.args.get("symbol", "SYNTH3X").upper()
+    if symbol not in SYMBOLS:
+        symbol = "SYNTH3X"
+    ctx = {"symbols": SYMBOLS, "symbol": symbol, "rows": [], "error": None,
+           "repeal_note": REPEAL_NOTE if SPLIT_REPEALED else None, "bh": None}
+    try:
+        ds = get_dataset(symbol)
+        bh = buy_and_hold(ds, costs=Costs())
+        ctx["bh"] = curve_metrics(bh)
+        ctx["windows"] = describe_windows(ds)
+        for key, (label, G) in CANDIDATES.items():
+            res = run_backtest(ds, G(), exit_rule=StructuralExit(),
+                               costs=Costs(), acknowledge_quarantine=True)
+            st = _bt_stats(res.closed_trades)
+            v = verdict(res.equity, bh)
+            n = st.get("n", 0)
+            ctx["rows"].append({
+                "key": key, "label": label, "v": v, "st": st,
+                "n": n,
+                "amb": (sum(1 for t in res.closed_trades if t.ambiguous) / n) if n else 0.0,
+                "exposure": res.exposure,
+                # DES-002 §6: an ambiguity share above 40% voids the verdict,
+                # whichever way it went.
+                "amb_void": (
+                    (sum(1 for t in res.closed_trades if t.ambiguous) / n) > 0.40
+                    if n else False
+                ),
+            })
+    except Exception as e:
+        import traceback
+        ctx["error"] = f"{type(e).__name__}: {e}"
+        ctx["trace"] = traceback.format_exc()
+    return render_template("compare.html", **ctx)
 
 
 @app.route("/levels")

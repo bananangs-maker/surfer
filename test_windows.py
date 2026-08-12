@@ -42,9 +42,21 @@ def test_selection_window_is_always_available(spanning):
     assert all(d <= SELECTION_END for d in sel.sessions)
 
 
-def test_validation_window_raises_while_locked(spanning):
-    with pytest.raises(WindowLocked):
-        validation_slice(spanning)
+def test_lock_state_matches_the_repeal_flag(spanning):
+    """§3.3 was repealed 2026-08-12, so the slice no longer raises.
+
+    The test follows the flag rather than asserting one behaviour, so restoring
+    the split by setting SPLIT_REPEALED=False re-arms the guard and this test
+    checks it again instead of needing an edit.
+    """
+    from windows import SPLIT_REPEALED
+
+    if SPLIT_REPEALED:
+        val = validation_slice(spanning)
+        assert all(d > SELECTION_END for d in val.sessions)
+    else:
+        with pytest.raises(WindowLocked):
+            validation_slice(spanning)
 
 
 def test_unlocking_requires_a_named_candidate(spanning):
@@ -55,6 +67,7 @@ def test_unlocking_requires_a_named_candidate(spanning):
 
 
 def test_unlock_then_validation_opens(spanning):
+    """The unlock machinery still works, for when the split is restored."""
     unlock_validation("B", note="선택 구간에서 B가 두 조건 모두 통과")
     val = validation_slice(spanning)
     assert val.sessions
@@ -78,12 +91,21 @@ def test_windows_together_cover_every_session(spanning):
     assert not (set(sel.sessions) & set(val.sessions))
 
 
-def test_describe_warns_when_selection_window_is_empty():
-    """The yfinance source (730 days) lies entirely inside validation."""
+def test_describe_reports_the_absence_of_out_of_sample_evidence():
+    """With §3.3 repealed the page must say so, plainly.
+
+    A comparison table reads like validation. When nothing is held back, the
+    status line is the only thing standing between the reader and that reading.
+    """
+    from windows import SPLIT_REPEALED
+
     ds = load_synthetic(n_sessions=200, start="2024-08-01")
     text = describe_windows(ds)
-    assert "LOCKED" in text
-    assert "WARNING" in text
+    if SPLIT_REPEALED:
+        assert "SPLIT REPEALED" in text
+        assert "out-of-sample evidence       : NONE" in text
+    else:
+        assert "LOCKED" in text and "WARNING" in text
 
 
 # --- loader interval guard ------------------------------------------------

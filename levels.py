@@ -41,15 +41,37 @@ class LevelGenerator(Protocol):
     ) -> LevelSet | None: ...
 
 
+_TR_CACHE: dict = {}
+_ATR_CACHE: dict = {}
+
+
 def true_range_60m(session: pd.DataFrame, prev_close: float | None) -> np.ndarray:
-    """Per-bar true range. Stub bars are EXCLUDED by the caller, not here."""
+    """Per-bar true range. Stub bars are EXCLUDED by the caller, not here.
+
+    Memoised. atr60 is called once per session with a sliding 12-session window,
+    so without a cache each session's true range is recomputed about twelve times
+    - and the recomputation is pure pandas column extraction, which dominated the
+    profile. The key includes prev_close because the first bar's true range
+    depends on the preceding session's close.
+    """
+    if len(session) == 0:
+        return np.empty(0)
+    key = (session["ts"].iloc[-1], len(session),
+           None if prev_close is None else round(prev_close, 6))
+    hit = _TR_CACHE.get(key)
+    if hit is not None:
+        return hit
     high = session["high"].to_numpy()
     low = session["low"].to_numpy()
     close = np.concatenate(
         [[prev_close if prev_close is not None else session["close"].iloc[0]],
          session["close"].to_numpy()[:-1]]
     )
-    return np.maximum.reduce([high - low, np.abs(high - close), np.abs(low - close)])
+    tr = np.maximum.reduce([high - low, np.abs(high - close), np.abs(low - close)])
+    if len(_TR_CACHE) > 40_000:      # bounded; this is a per-process scratch cache
+        _TR_CACHE.clear()
+    _TR_CACHE[key] = tr
+    return tr
 
 
 def stub_range_ratio(history: list[pd.DataFrame]) -> dict[str, float]:
@@ -111,6 +133,32 @@ def atr60(
     lookback_bars window then spans a different number of calendar sessions
     between the two settings. That is a second, separate confound.
     """
+    # Only the tail can affect the result: the mean is taken over the last
+    # `lookback_bars` true ranges. Iterating the whole history to then discard
+    # all but 42 values is what made candidate D ten times slower than the rule
+    # it gates - it passes a 284-session window, and every session of it was
+    # being walked on every call.
+    #
+    # 20 sessions is a safe floor. With stubs excluded a regular session
+    # contributes 6 bars and an early close 3, so 20 sessions yield at least 60
+    # usable bars against a 42-bar requirement. Bars beyond the tail cannot enter
+    # trs[-lookback_bars:], so the result is unchanged.
+    needed = max(20, lookback_bars // 3 + 4)
+    if len(history) > needed:
+        history = history[-needed:]
+
+    if history:
+        _tail = history[-1]
+        _k = (
+            _tail["ts"].iloc[-1] if len(_tail) else None,
+            len(history), lookback_bars, exclude_stubs,
+        )
+        _hit = _ATR_CACHE.get(_k)
+        if _hit is not None:
+            return _hit
+    else:
+        _k = None
+
     trs: list[float] = []
     prev_close: float | None = None
     for sess in history:
@@ -122,7 +170,12 @@ def atr60(
         prev_close = float(sess["close"].iloc[-1])
     if len(trs) < lookback_bars:
         return None
-    return float(np.mean(trs[-lookback_bars:]))
+    out = float(np.mean(trs[-lookback_bars:]))
+    if _k is not None:
+        if len(_ATR_CACHE) > 40_000:
+            _ATR_CACHE.clear()
+        _ATR_CACHE[_k] = out
+    return out
 
 
 class PlaceholderBreakout:
@@ -417,8 +470,12 @@ class VolatilityRegimeGate:
     """
 
     name = "CANDIDATE_D_vol_regime_gated_breakout"
-    # 252 sessions of percentile history, plus the ATR window itself.
-    lookback_sessions = 264
+    # 252 percentile readings + 12 sessions for the ATR window + 20 warm-up.
+    # An earlier value of 264 was too small: the 20-session warm-up consumed part
+    # of it, so the rolling window was about 244 sessions, not the 252 that
+    # SURFER-DES-002 §4.1 specifies. The gate was quietly running to a different
+    # spec than the document. Found before any real measurement.
+    lookback_sessions = 284
 
     PERCENTILE_WINDOW = 252
     BLOCK_AT_PERCENTILE = 80.0
@@ -429,33 +486,71 @@ class VolatilityRegimeGate:
         # timestamp. Without it the percentile recomputed the whole trailing
         # series on every step, which is quadratic in session count - the same
         # mistake already made once in diagnostics.py.
-        self._atr_memo: dict = {}
+        # Insertion-ordered store of one ATR reading per session, in session
+        # order. Python dicts preserve insertion order, which is what makes the
+        # trailing-252 slice below correct.
+        self._atr_series: dict = {}
+        self._ordered: list = []       # (session ts, atr), kept sorted by ts
+
+    def _remember(self, key, value: float) -> None:
+        import bisect
+
+        if key in self._atr_series:
+            return
+        self._atr_series[key] = value
+        bisect.insort(self._ordered, (key, value))
 
     def percentile(self, history: list[pd.DataFrame]) -> float | None:
         """Where today's ATR sits against its own trailing distribution.
 
-        Computed on a per-session basis: one ATR reading per session, using only
-        sessions that closed before the one being armed.
+        Incremental: only the newest session's ATR is computed, then the trailing
+        252 readings are taken from an insertion-ordered store. The previous
+        version rebuilt the whole series on every call, which made this candidate
+        19s against 1.5s for the others - twelve times the cost of the rule it
+        gates, all of it recomputation.
+
+        Readings are keyed by the session's final bar timestamp, so a session
+        appearing in overlapping windows is computed exactly once.
         """
         if len(history) < 30:
             return None
-        series: list[float] = []
-        for k in range(20, len(history) + 1):
-            tail = history[k - 1]
-            if len(tail) == 0:
-                continue
-            key = tail["ts"].iloc[-1]
-            a = self._atr_memo.get(key)
-            if a is None:
-                a = atr60(history[max(0, k - 12):k])
-                if a is None:
-                    continue
-                self._atr_memo[key] = a
-            series.append(a)
-        if len(series) < 30:
+
+        tail = history[-1]
+        if len(tail) == 0:
             return None
-        window = series[-self.PERCENTILE_WINDOW:]
-        current = window[-1]
+        key = tail["ts"].iloc[-1]
+        if key not in self._atr_series:
+            a = atr60(history[-12:])
+            if a is None:
+                return None
+            self._remember(key, a)
+        elif len(self._atr_series) < 30:
+            return None
+
+        # Backfill on a cold start: without it the first call would have a
+        # one-element distribution and every session would read as percentile 100.
+        if len(self._atr_series) < 30:
+            for k in range(20, len(history)):
+                t = history[k - 1]
+                if len(t) == 0:
+                    continue
+                kk = t["ts"].iloc[-1]
+                if kk not in self._atr_series:
+                    a = atr60(history[max(0, k - 12):k])
+                    if a is not None:
+                        self._remember(kk, a)
+
+        # Kept ordered by bisect insertion rather than sorted on every call.
+        # Sorting the whole store per session cost more than the rule it gates.
+        # Order must be by session timestamp, NOT insertion: the first version
+        # inserted the current session before back-filling older ones, so the
+        # newest reading sat at position 0 and the trailing-252 slice took the
+        # wrong sessions entirely - with entirely plausible-looking output.
+        vals = [v for _, v in self._ordered]
+        if len(vals) < 30:
+            return None
+        window = vals[-self.PERCENTILE_WINDOW:]
+        current = self._atr_series[key]
         return 100.0 * float(np.mean([v <= current for v in window]))
 
     def __call__(self, history, armed_for):

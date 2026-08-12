@@ -11,7 +11,7 @@ services:
     # --bind is explicit even though gunicorn honours $PORT by default; Render
     # fails the deploy if nothing answers on that port, so it is worth stating.
     # Long timeout: fetching 730 days of 60m bars can take a while.
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 8 --timeout 180
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 8 --timeout 300
     healthCheckPath: /healthz
     envVars:
       - key: PYTHON_VERSION

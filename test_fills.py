@@ -184,3 +184,16 @@ def test_pullback_rejects_a_limit_above_the_trigger():
 
     with pytest.raises(ValueError):
         LevelSet(SD, Side.LONG, 100.0, 102.0, 96.0, style=EntryStyle.PULLBACK)
+
+
+def test_fill_fields_are_plain_python_types():
+    """Guards a leak found when iterrows was replaced with numpy arrays.
+
+    `at_gap` became np.False_ - equal to False but not identical to it, so every
+    `is False` check downstream silently changed meaning while every value still
+    printed correctly.
+    """
+    out = adjudicate_session(levels(), frame(bar(99, 100.5, 98.8, 100.4)))
+    assert type(out.entry.at_gap) is bool
+    assert type(out.entry.ambiguous) is bool
+    assert type(out.entry.price) is float
