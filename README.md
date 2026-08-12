@@ -387,7 +387,12 @@ buy-and-hold, against a requirement of 0.50.
 
 256 cells cannot finish inside one request on a 0.1-CPU instance, so the route
 computes 14 per request and resumes on refresh. Crude, but it needs no task queue
-and the partial distribution is already informative.
+and the partial distribution is already informative — **provided the prefix is
+representative**, which it was not at first. `itertools.product` varies the last
+axis fastest, so the first 56 cells all shared one trigger value; every top-ranked
+candidate had that value and it read as a finding about the trigger. Evaluation
+order is now shuffled under a fixed seed, so any prefix covers every axis value,
+and the page reports per-axis coverage alongside progress.
 
 
 ## The ground, and what the loading screen is actually for

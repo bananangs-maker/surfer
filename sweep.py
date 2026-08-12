@@ -86,11 +86,31 @@ def build_generator(p: dict):
     return g
 
 
-def combos() -> list[dict]:
-    return [
+# Fixed seed: the ORDER is shuffled but reproducibly, so two runs of a partial
+# sweep cover the same cells and can be compared.
+SHUFFLE_SEED = 20260812
+
+
+def combos(shuffled: bool = True) -> list[dict]:
+    """Evaluation order is shuffled so that ANY PREFIX is a representative sample.
+
+    itertools.product varies the last axis fastest, so the first N combinations all
+    share one value of the first axis. A partial sweep then measured a single corner
+    of the grid: with 56 of 256 cells done, every result had trigger=0.05, the
+    top-ranked candidates all had trigger=0.05, and that looked like a finding about
+    the trigger when it was an artefact of the loop order.
+
+    Shuffling costs nothing and makes progress reports honest at every stage.
+    """
+    out = [
         dict(zip(AXES, vals))
         for vals in itertools.product(*(GRID[a] for a in AXES))
     ]
+    if shuffled:
+        import random
+
+        random.Random(SHUFFLE_SEED).shuffle(out)
+    return out
 
 
 def run_one(ds, p: dict, bh, bh_mdd: float) -> Cell:
@@ -173,9 +193,16 @@ def analyse(res: SweepResult) -> dict:
     else:
         verdict = {"selectable": True, "reason": "§15.4 통과 — 표본 내 후보로만"}
 
+    # Coverage per axis: a partial sweep must say how much of each axis it has
+    # actually seen, or a median over one value reads as a median over four.
+    coverage = {
+        a: len({c.params[a] for c in res.cells}) / len(GRID[a]) for a in AXES
+    }
     return {
         "n": len(res.cells),
         "total": res.total,
+        "coverage": coverage,
+        "partial": len(res.cells) < res.total,
         "pass_rate": pass_rate,
         "bh_calmar": res.bh_calmar,
         "bh_mdd": res.bh_mdd,

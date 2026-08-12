@@ -91,7 +91,16 @@
   <div class="bar"><i style="width:{{ (100 * a.n / a.total)|round(1) }}%"></i></div>
   <div class="prog">{{ a.n }} / {{ a.total }} 조합
     {% if remaining %}· 남은 {{ remaining }}개 — 새로고침하면 이어서 계산합니다
-    (요청당 {{ per_req }}개){% else %}· 완료{% endif %}</div>
+    (요청당 {{ per_req }}개){% else %}· 완료{% endif %}
+    · 축 커버리지 {% for ax, v in a.coverage.items() %}{{ ax }} {{ '%.0f'|format(v*100) }}%{% if not loop.last %} / {% endif %}{% endfor %}
+  </div>
+  {% if a.partial %}
+  <div class="warn" style="margin-top:8px">
+    <p><strong>부분 결과입니다.</strong> 평가 순서를 고정 시드로 무작위화했으므로 앞쪽
+    {{ a.n }}개도 격자 전체의 표본입니다 — 다만 표본이 작으면 통과율과 순위가 흔들립니다.
+    판정은 완료 후에 읽으세요.</p>
+  </div>
+  {% endif %}
 
   <h2>1 · 통과율 — 격자에 견고한 영역이 있는가</h2>
   <div class="row">

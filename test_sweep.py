@@ -73,12 +73,27 @@ def test_distribution_is_reported_not_just_the_best(small):
     assert "axis_medians" in a and set(a["axis_medians"]) == set(SW.AXES)
 
 
-def test_partial_sweep_reports_missing_axis_values_as_none(small):
-    """A partial sweep leaves some axis values with no cells; nan or 0.0 there would
-    read as a measurement that had not been taken."""
-    a = SW.analyse(small)
-    vals = [v for d in a["axis_medians"].values() for v in d.values()]
-    assert any(v is None for v in vals) or len(small.cells) == 256
+def test_axis_medians_are_none_where_nothing_was_measured():
+    """nan or 0.0 there would read as a measurement that had not been taken.
+
+    Shuffled order means a normal partial sweep covers every axis value, so this
+    exercises the case directly with a deliberately narrow set of cells.
+    """
+    from backtest import Costs, buy_and_hold, curve_metrics
+
+    ds = load_synthetic(n_sessions=200)
+    bh = buy_and_hold(ds, costs=Costs())
+    bm = curve_metrics(bh)
+    res = SW.SweepResult(bh_calmar=bm["calmar"], bh_mdd=bm["max_drawdown"],
+                         total=len(SW.combos()))
+    narrow = [p for p in SW.combos() if p["stop"] == SW.GRID["stop"][0]][:6]
+    for p in narrow:
+        res.cells.append(SW.run_one(ds, p, bh, bm["max_drawdown"]))
+    a = SW.analyse(res)
+    stop_row = a["axis_medians"]["stop"]
+    assert stop_row[SW.GRID["stop"][0]] is not None
+    assert all(stop_row[v] is None for v in SW.GRID["stop"][1:])
+    assert a["coverage"]["stop"] == pytest.approx(0.25)
 
 
 def test_neighbours_stay_inside_the_grid():
@@ -115,3 +130,30 @@ def test_sweep_resumes_across_requests():
         return int(re.search(r"(\d+) / 256 조합", h).group(1))
 
     assert done(second) > done(first)
+
+
+def test_any_prefix_of_the_queue_covers_every_axis_value():
+    """The bug this fixes made a partial sweep measure one corner of the grid.
+
+    itertools.product varies the last axis fastest, so the first 56 combinations all
+    had trigger=0.05 — every top-ranked candidate shared that value, which read as a
+    finding about the trigger and was an artefact of the loop order.
+    """
+    cs = SW.combos()
+    for n in (14, 28, 56):
+        prefix = cs[:n]
+        for ax in SW.AXES:
+            assert len({c[ax] for c in prefix}) == len(SW.GRID[ax]), (n, ax)
+
+
+def test_shuffle_is_reproducible():
+    """Two partial runs must cover the same cells, or progress is not comparable."""
+    assert SW.combos()[:20] == SW.combos()[:20]
+    assert SW.combos(shuffled=False)[:20] != SW.combos()[:20]
+
+
+def test_analysis_reports_axis_coverage(small):
+    a = SW.analyse(small)
+    assert set(a["coverage"]) == set(SW.AXES)
+    assert all(0.0 < v <= 1.0 for v in a["coverage"].values())
+    assert a["partial"] is (len(small.cells) < small.total)
